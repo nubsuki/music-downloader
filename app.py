@@ -1,7 +1,7 @@
 import concurrent.futures
 import os
 import threading
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import downloader
 import state
@@ -92,6 +92,37 @@ def downloaded_files():
         return jsonify(sorted(files, reverse=True))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/delete_file", methods=["POST"])
+def delete_file():
+    """Deletes a file from the downloads directory."""
+    data = request.get_json()
+    filename = data.get("filename")
+
+    if not filename:
+        return jsonify({"success": False, "error": "Filename is required."}), 400
+
+    file_path = os.path.join(DOWNLOADS_DIR, filename)
+    
+    # Security: Ensure the path is within the downloads directory
+    if not os.path.normpath(file_path).startswith(os.path.normpath(DOWNLOADS_DIR)):
+        return jsonify({"success": False, "error": "Invalid file path."}), 400
+
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({"success": True, "message": f"Deleted {filename}."})
+        else:
+            return jsonify({"success": False, "error": "File not found."}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/downloads/<path:filename>")
+def serve_downloaded_file(filename):
+    """Serves a file from the downloads directory."""
+    return send_from_directory(DOWNLOADS_DIR, filename)
 
 
 if __name__ == "__main__":

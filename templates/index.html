@@ -46,9 +46,18 @@
       </div>
       <div id="downloaded-section" class="status-section">
         <h2>Downloaded Songs</h2>
+        <input
+          type="text"
+          id="downloaded-search-input"
+          placeholder="Search downloaded songs..."
+        />
         <ul id="downloaded-list"></ul>
       </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <footer id="player-footer">
+      <div id="now-playing">No song selected</div>
+      <audio id="audio-player" controls></audio>
+    </footer>
   </body>
 </html>

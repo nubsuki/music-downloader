@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const completedList = document.getElementById("completed-list");
   const failedList = document.getElementById("failed-list");
   const downloadedList = document.getElementById("downloaded-list");
+  const audioPlayer = document.getElementById("audio-player");
+  const nowPlaying = document.getElementById("now-playing");
 
   /**
    * Helper function to create a list item for a URL.
@@ -38,17 +40,41 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     items.forEach((item) => {
-      // Failed items are objects with a url and error property
+      let li;
+      // Handle failed items as objects
       if (typeof item === "object" && item.url) {
-        const li = createListItem(item.url, itemClass);
+        li = createListItem(item.url, itemClass);
         const errorDetail = document.createElement("small");
-        errorDetail.textContent = item.error.replace('failed: ', '');
+        errorDetail.textContent = item.error.replace("failed: ", "");
         li.appendChild(errorDetail);
-        listElement.appendChild(li);
       } else {
-        const li = createListItem(item, itemClass);
-        listElement.appendChild(li);
+        li = createListItem(item, itemClass);
+        // add a delete button
+        if (listElement.id === "downloaded-list") {
+          const textSpan = document.createElement("span");
+          textSpan.textContent = item;
+
+          const deleteButton = document.createElement("button");
+          deleteButton.textContent = "Delete";
+          deleteButton.className = "delete-button";
+          deleteButton.dataset.filename = item;
+
+          const playButton = document.createElement("button");
+          playButton.textContent = "Play";
+          playButton.className = "play-button";
+          playButton.dataset.filename = item;
+
+          const buttonContainer = document.createElement("div");
+          buttonContainer.className = "list-item-buttons";
+          buttonContainer.appendChild(playButton);
+          buttonContainer.appendChild(deleteButton);
+
+          li.innerHTML = "";
+          li.appendChild(textSpan);
+          li.appendChild(buttonContainer);
+        }
       }
+      listElement.appendChild(li);
     });
   };
 
@@ -129,6 +155,69 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       console.error("Error submitting URL:", error);
       displayMessage(error.message, "error");
+    }
+  });
+
+  // Event listener for the downloaded files search bar
+  const downloadedSearchInput = document.getElementById(
+    "downloaded-search-input"
+  );
+  downloadedSearchInput.addEventListener("keyup", () => {
+    const filter = downloadedSearchInput.value.toLowerCase();
+    const items = downloadedList.getElementsByTagName("li");
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const text = item.textContent || item.innerText;
+      if (text.toLowerCase().indexOf(filter) > -1) {
+        item.style.display = "";
+      } else {
+        item.style.display = "none";
+      }
+    }
+  });
+
+  // Event listener for deleting downloaded files
+  downloadedList.addEventListener("click", async (event) => {
+    if (event.target.classList.contains("play-button")) {
+      const filename = event.target.dataset.filename;
+      if (!filename) return;
+
+      const audioSrc = `/downloads/${encodeURIComponent(filename)}`;
+      audioPlayer.src = audioSrc;
+      audioPlayer.load();
+      audioPlayer.play();
+      nowPlaying.textContent = `Now Playing: ${filename}`;
+    }
+    
+    if (event.target.classList.contains("delete-button")) {
+      const filename = event.target.dataset.filename;
+      if (!filename) return;
+
+      if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/delete_file", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ filename: filename }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          displayMessage("File deleted successfully!");
+          await updateDownloadedFiles(); // Refresh the list
+        } else {
+          throw new Error(data.error || "Failed to delete file.");
+        }
+      } catch (error) {
+        console.error("Error deleting file:", error);
+        displayMessage(error.message, "error");
+      }
     }
   });
 
