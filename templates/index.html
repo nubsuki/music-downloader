@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Music Downloader</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Music Downloader</h1>
+      <form id="url-form">
+        <input
+          type="text"
+          id="url-input"
+          placeholder="Enter YouTube URL"
+          required
+        />
+        <button type="submit">Add to Queue</button>
+      </form>
+      <div id="message-container"></div>
+
+      <div class="status-grid">
+        <div id="downloading-section" class="status-section">
+          <h2>Downloading</h2>
+          <ul id="downloading-list"></ul>
+        </div>
+
+        <div id="queued-section" class="status-section">
+          <h2>In Queue</h2>
+          <ul id="queued-list"></ul>
+        </div>
+
+        <div id="completed-section" class="status-section">
+          <h2>Completed</h2>
+          <ul id="completed-list"></ul>
+        </div>
+
+        <div id="failed-section" class="status-section">
+          <h2>Failed</h2>
+          <ul id="failed-list"></ul>
+        </div>
+      </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+</html>
