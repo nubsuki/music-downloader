@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const queuedList = document.getElementById("queued-list");
   const completedList = document.getElementById("completed-list");
   const failedList = document.getElementById("failed-list");
+  const downloadedList = document.getElementById("downloaded-list");
 
   /**
    * Helper function to create a list item for a URL.
@@ -65,9 +66,26 @@ document.addEventListener("DOMContentLoaded", () => {
       updateList(queuedList, data.queued, "item-queued");
       updateList(completedList, data.completed, "item-completed");
       updateList(failedList, data.failed, "item-failed");
+
+      // Also update the list of downloaded files
+      await updateDownloadedFiles();
     } catch (error) {
       console.error("Error updating status:", error);
       displayMessage("Error updating queue status.", "error");
+    }
+  };
+
+  // Function to fetch and update the list of downloaded files
+  const updateDownloadedFiles = async () => {
+    try {
+      const response = await fetch("/api/downloaded_files");
+      if (!response.ok) {
+        throw new Error("Failed to fetch downloaded files.");
+      }
+      const files = await response.json();
+      updateList(downloadedList, files, "item-downloaded");
+    } catch (error) {
+      console.error("Error updating downloaded files:", error);
     }
   };
 

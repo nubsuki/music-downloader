@@ -73,6 +73,27 @@ def status():
     return jsonify(status_report)
 
 
+DOWNLOADS_DIR = "downloads"
+
+
+@app.route("/api/downloaded_files")
+def downloaded_files():
+    """Returns a list of files in the downloads directory."""
+    if not os.path.exists(DOWNLOADS_DIR):
+        os.makedirs(DOWNLOADS_DIR)
+        return jsonify([])
+
+    try:
+        files = [
+            f
+            for f in os.listdir(DOWNLOADS_DIR)
+            if os.path.isfile(os.path.join(DOWNLOADS_DIR, f))
+        ]
+        return jsonify(sorted(files, reverse=True))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     # Get cookies path from environment variable or prompt the user
     cookies_path = os.environ.get("DOWNLOADER_COOKIES_PATH")
