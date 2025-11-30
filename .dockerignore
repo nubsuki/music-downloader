@@ -5,3 +5,5 @@ downloads
 .env
 Dockerfile
 README.md
+/ffmpeg
+.venv

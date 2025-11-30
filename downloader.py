@@ -8,6 +8,8 @@ import concurrent.futures
 import state
 from dotenv import load_dotenv
 
+import platform
+
 load_dotenv()
 
 # Locate local ffmpeg folder
@@ -20,6 +22,14 @@ script_dir = os.path.dirname(script_path)
 
 # Local ffmpeg binary directory
 local_ffmpeg_bin_dir = os.path.join(script_dir, "ffmpeg", "bin")
+ffmpeg_binary_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+local_ffmpeg_executable = os.path.join(local_ffmpeg_bin_dir, ffmpeg_binary_name)
+has_local_ffmpeg = os.path.isfile(local_ffmpeg_executable)
+
+if has_local_ffmpeg:
+    print(f"[INFO] Found local FFmpeg at: {local_ffmpeg_executable}")
+else:
+    print(f"[INFO] Local FFmpeg not found at {local_ffmpeg_executable}. using system FFmpeg.")
 
 # Global queue and worker configuration
 download_queue = queue.Queue()
@@ -71,8 +81,10 @@ def download_youtube_url(
 
     command = [
         "yt-dlp",
-        f"--ffmpeg-location={local_ffmpeg_bin_dir}",
     ]
+
+    if has_local_ffmpeg:
+        command.append(f"--ffmpeg-location={local_ffmpeg_bin_dir}")
 
     if cookies_file_path:
         command.extend(["--cookies", cookies_file_path])
