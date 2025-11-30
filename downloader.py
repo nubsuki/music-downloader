@@ -6,8 +6,11 @@ import threading
 import queue
 import concurrent.futures
 import state
+from dotenv import load_dotenv
 
-# locate the local ffmpeg folder.
+load_dotenv()
+
+# Locate local ffmpeg folder
 try:
     script_path = os.path.abspath(__file__)
 except NameError:
@@ -15,16 +18,34 @@ except NameError:
 
 script_dir = os.path.dirname(script_path)
 
-# Path to the local ffmpeg binary directory
+# Local ffmpeg binary directory
 local_ffmpeg_bin_dir = os.path.join(script_dir, "ffmpeg", "bin")
 
-# Global Queue and Worker Configuration
+# Global queue and worker configuration
 download_queue = queue.Queue()
-MAX_WORKERS = 3  # Maximum number of concurrent downloads
 
-# Global variable to store the cookies file path
-COOKIES_FILE_PATH = None
+# Max concurrent downloads (from environment variable)
+try:
+    MAX_WORKERS = int(os.environ.get("MAX_WORKERS", "3"))
+    if MAX_WORKERS < 1:
+        print(f"[WARNING] MAX_WORKERS must be at least 1. Using default value of 3.")
+        MAX_WORKERS = 3
+except (ValueError, TypeError):
+    print(f"[WARNING] Invalid MAX_WORKERS value. Using default value of 3.")
+    MAX_WORKERS = 3
 
+if MAX_WORKERS != 3:
+    print(f"[INFO] Using {MAX_WORKERS} concurrent download workers.")
+
+# Cookies file path
+COOKIES_FILE_PATH = os.environ.get("DOWNLOADER_COOKIES_PATH") or None
+
+# Validate cookies path
+if COOKIES_FILE_PATH and not os.path.exists(COOKIES_FILE_PATH):
+    print(f"[WARNING] Cookies file not found at: {COOKIES_FILE_PATH}. Continuing without authentication.")
+    COOKIES_FILE_PATH = None
+elif COOKIES_FILE_PATH:
+    print(f"[INFO] Using cookies file: {COOKIES_FILE_PATH}")
 
 def download_youtube_url(
     url: str, cookies_file_path: str, output_path: str = "downloads"
@@ -34,7 +55,6 @@ def download_youtube_url(
     specifying a local path for FFmpeg, and converts it to MP3 with album art.
     This function is run by a worker thread and updates the central state.
     """
-    # Set status to "downloading"
     with state.status_lock:
         state.download_statuses[url] = "downloading"
 
@@ -47,7 +67,6 @@ def download_youtube_url(
             state.download_statuses[url] = f"failed: {err_msg}"
         return
 
-    # Create the output directory if it doesn't exist
     os.makedirs(output_path, exist_ok=True)
 
     command = [

@@ -10,19 +10,16 @@ import state
 app = Flask(__name__)
 
 
-# Initialize the thread pool executor for running downloads
+# Initialize thread pool executor
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=downloader.MAX_WORKERS)
 
-# Start the background thread that pulls items from the queue
+# Start background worker thread
 worker_thread = threading.Thread(
     target=downloader.queue_worker_loop,
     args=(downloader.download_queue, executor, downloader.COOKIES_FILE_PATH),
     daemon=True,
 )
 worker_thread.start()
-
-
-# Web Interface Routes
 
 
 @app.route("/")
@@ -41,10 +38,8 @@ def add_url():
         return jsonify({"success": False, "error": "URL is required."}), 400
 
     with state.status_lock:
-        # status tracking dictionary
         state.download_statuses[url] = "queued"
 
-    # download queue for the worker
     downloader.download_queue.put(url)
 
     return jsonify({"success": True, "message": "URL added to queue."})
@@ -105,7 +100,7 @@ def delete_file():
 
     file_path = os.path.join(DOWNLOADS_DIR, filename)
     
-    # Security: Ensure the path is within the downloads directory
+    # Security: ensure path is within downloads directory
     if not os.path.normpath(file_path).startswith(os.path.normpath(DOWNLOADS_DIR)):
         return jsonify({"success": False, "error": "Invalid file path."}), 400
 
@@ -126,7 +121,7 @@ def serve_downloaded_file(filename):
 
 
 if __name__ == "__main__":
-    # Get cookies path from environment variable or prompt the user
+    # Get cookies path from environment
     cookies_path = os.environ.get("DOWNLOADER_COOKIES_PATH")
     if not cookies_path:
         print(
@@ -141,7 +136,6 @@ if __name__ == "__main__":
     else:
         print(f"[INFO] Using cookies file: {cookies_path}")
 
-    # Set the cookies path in the downloader module
     downloader.COOKIES_FILE_PATH = cookies_path
 
     print("-" * 50)
