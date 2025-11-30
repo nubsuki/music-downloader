@@ -2,7 +2,7 @@ import concurrent.futures
 import os
 import threading
 from flask import Flask, jsonify, render_template, request, send_from_directory
-
+from waitress import serve
 import downloader
 import state
 
@@ -139,11 +139,11 @@ if __name__ == "__main__":
     downloader.COOKIES_FILE_PATH = cookies_path
 
     print("-" * 50)
-    print(f"Starting Flask server...")
+    print(f"Starting server")
     print(f"Open http://127.0.0.1:5000 in your browser.")
     print("-" * 50)
 
-    app.run(debug=True, use_reloader=False)
+    serve(app, host="0.0.0.0", port=5000)
 
     print("\n[INFO] Shutting down workers...")
     executor.shutdown(wait=True)
