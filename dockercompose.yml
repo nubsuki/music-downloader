@@ -1,13 +1,13 @@
 services:
   app:
     container_name: music-downloader
-    image: music-downloader:latest
+    image: ghcr.io/nubsuki/music-downloader:latest
     ports:
       - "5000:5000"
     environment:
       MAX_WORKERS: "3"
-      DOWNLOADER_COOKIES_PATH: "/app/cookies.txt"
+      DOWNLOADER_COOKIES_PATH: "/app/cookies.txt" # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp
     volumes:
-      - E:/Desktop/downloads:/app/downloads
-      - E:/Desktop/cookies.txt:/app/cookies.txt
+      - mnt/drive1/downloads:/app/downloads
+      - mnt/drive1/cookies.txt:/app/cookies.txt
     restart: unless-stopped
