@@ -31,7 +31,7 @@ services:
       - "5000:5000"
     environment:
       MAX_WORKERS: "3"
-      DOWNLOADER_COOKIES_PATH: "/app/cookies.txt"
+      DOWNLOADER_COOKIES_PATH: "/app/cookies.txt" # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp
     volumes:
       - mnt/drive1/downloads:/app/downloads
       - mnt/drive1/cookies.txt:/app/cookies.txt
