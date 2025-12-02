@@ -112,6 +112,11 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Update the downloaded files list
       updateList(downloadedList, data.files, "item-downloaded");
+
+      // Re-apply current search filter after list refresh
+      if (typeof applyDownloadedFilter === "function") {
+        applyDownloadedFilter();
+      }
       
       // Update MP3 counter
       updateMp3Counter(data.mp3_count);
@@ -183,19 +188,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadedSearchInput = document.getElementById(
     "downloaded-search-input"
   );
-  downloadedSearchInput.addEventListener("keyup", () => {
-    const filter = downloadedSearchInput.value.toLowerCase();
+  const normalizeForSearch = (str) => {
+    return (str || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  };
+  const applyDownloadedFilter = () => {
+    const filter = normalizeForSearch(downloadedSearchInput.value);
     const items = downloadedList.getElementsByTagName("li");
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const text = item.textContent || item.innerText;
-      if (text.toLowerCase().indexOf(filter) > -1) {
-        item.style.display = "";
-      } else {
-        item.style.display = "none";
-      }
+      const normalizedText = normalizeForSearch(text);
+      item.style.display = normalizedText.indexOf(filter) > -1 ? "" : "none";
     }
-  });
+  };
+  downloadedSearchInput.addEventListener("keyup", applyDownloadedFilter);
 
   // Event listener for deleting downloaded files
   downloadedList.addEventListener("click", async (event) => {
