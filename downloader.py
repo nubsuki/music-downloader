@@ -50,6 +50,8 @@ if MAX_WORKERS != 3:
 # Cookies file path
 COOKIES_FILE_PATH = os.environ.get("DOWNLOADER_COOKIES_PATH") or None
 
+USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lower() in ("1", "true", "yes", "on")
+
 # Validate cookies path
 if COOKIES_FILE_PATH and not os.path.exists(COOKIES_FILE_PATH):
     print(f"[WARNING] Cookies file not found at: {COOKIES_FILE_PATH}. Continuing without authentication.")
@@ -78,6 +80,7 @@ def download_youtube_url(
         return
 
     os.makedirs(output_path, exist_ok=True)
+    archive_path = os.path.join(output_path, ".archive.txt")
 
     command = [
         "yt-dlp",
@@ -95,7 +98,15 @@ def download_youtube_url(
         "--embed-metadata",
         "--embed-thumbnail",
         "--audio-quality", "0",
-        "-o", os.path.join(output_path, "%(title)s.%(ext)s"),
+        "--no-overwrites",
+    ])
+
+    if USE_DOWNLOAD_ARCHIVE:
+        command.extend(["--download-archive", archive_path])
+
+    command.extend([
+        "--ignore-errors",
+        "-o", os.path.join(output_path, "%(title)s [%(id)s].%(ext)s"),
         url,
     ])
 
@@ -107,7 +118,7 @@ def download_youtube_url(
         with state.status_lock:
             state.download_statuses[url] = "completed"
 
-    except subprocess.CalledError as e:
+    except subprocess.CalledProcessError as e:
         err_msg = f"Download failed (yt-dlp exited with code {e.returncode}). Stderr: {e.stderr}"
         print(f"\n[ERROR] {err_msg}")
         with state.status_lock:
@@ -132,8 +143,8 @@ def queue_worker_loop(
     while True:
         try:
             url = q.get(timeout=1)
-            executor.submit(download_youtube_url, url, cookies_file_path)
-            q.task_done()
+            future = executor.submit(download_youtube_url, url, cookies_file_path)
+            future.add_done_callback(lambda _: q.task_done())
 
         except queue.Empty:
             pass

@@ -2,3 +2,4 @@
 /.venv
 /__pycache__
 cookies.txt
+dockercompose1.yml
