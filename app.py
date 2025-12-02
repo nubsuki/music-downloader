@@ -73,18 +73,26 @@ DOWNLOADS_DIR = "downloads"
 
 @app.route("/api/downloaded_files")
 def downloaded_files():
-    """Returns a list of files in the downloads directory."""
+    """Returns a list of MP3 files in the downloads directory with MP3 count information."""
     if not os.path.exists(DOWNLOADS_DIR):
         os.makedirs(DOWNLOADS_DIR)
-        return jsonify([])
+        return jsonify({"files": [], "mp3_count": 0})
 
     try:
-        files = [
+        # Get only MP3 files
+        mp3_files = [
             f
             for f in os.listdir(DOWNLOADS_DIR)
-            if os.path.isfile(os.path.join(DOWNLOADS_DIR, f))
+            if os.path.isfile(os.path.join(DOWNLOADS_DIR, f)) and f.lower().endswith('.mp3')
         ]
-        return jsonify(sorted(files, reverse=True))
+        
+        # Count MP3 files
+        mp3_count = len(mp3_files)
+        
+        return jsonify({
+            "files": sorted(mp3_files, reverse=True),
+            "mp3_count": mp3_count
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

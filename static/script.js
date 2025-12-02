@@ -108,11 +108,32 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!response.ok) {
         throw new Error("Failed to fetch downloaded files.");
       }
-      const files = await response.json();
-      updateList(downloadedList, files, "item-downloaded");
+      const data = await response.json();
+      
+      // Update the downloaded files list
+      updateList(downloadedList, data.files, "item-downloaded");
+      
+      // Update MP3 counter
+      updateMp3Counter(data.mp3_count);
     } catch (error) {
       console.error("Error updating downloaded files:", error);
     }
+  };
+
+  // Function to update MP3 counter display
+  const updateMp3Counter = (count) => {
+    let counterElement = document.getElementById("mp3-counter");
+    
+    // Create counter element if it doesn't exist
+    if (!counterElement) {
+      const downloadedSection = document.getElementById("downloaded-section");
+      counterElement = document.createElement("div");
+      counterElement.id = "mp3-counter";
+      counterElement.className = "mp3-counter";
+      downloadedSection.insertBefore(counterElement, downloadedSection.firstChild.nextSibling);
+    }
+    
+    counterElement.textContent = `${count} MP3 file${count !== 1 ? 's' : ''} downloaded`;
   };
 
   // Function to display transient messages
