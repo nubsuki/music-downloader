@@ -93,8 +93,8 @@ def downloaded_files():
             "files": sorted(mp3_files, reverse=True),
             "mp3_count": mp3_count
         })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return jsonify({"error": "An error occurred while retrieving the file list."}), 500
 
 
 @app.route("/api/delete_file", methods=["POST"])
