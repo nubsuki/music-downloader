@@ -106,10 +106,10 @@ def delete_file():
     if not filename:
         return jsonify({"success": False, "error": "Filename is required."}), 400
 
-    file_path = os.path.join(DOWNLOADS_DIR, filename)
+    file_path = os.path.normpath(os.path.join(DOWNLOADS_DIR, filename))
+    downloads_dir_normalized = os.path.normpath(DOWNLOADS_DIR)
     
-    # Security: ensure path is within downloads directory
-    if not os.path.normpath(file_path).startswith(os.path.normpath(DOWNLOADS_DIR)):
+    if not file_path.startswith(downloads_dir_normalized):
         return jsonify({"success": False, "error": "Invalid file path."}), 400
 
     try:
