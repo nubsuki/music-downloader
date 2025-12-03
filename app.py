@@ -118,8 +118,8 @@ def delete_file():
             return jsonify({"success": True, "message": f"Deleted {filename}."})
         else:
             return jsonify({"success": False, "error": "File not found."}), 404
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception:
+        return jsonify({"success": False, "error": "An error occurred while deleting the file."}), 500
 
 
 @app.route("/downloads/<path:filename>")
