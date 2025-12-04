@@ -72,8 +72,10 @@ def download_youtube_url(
     is_playlist = parsed.path.startswith("/playlist") or ("list" in qs and not qs.get("v"))
     if is_playlist:
         print("[WORKER] Detected playlist URL.")
+        playlist_folder_template = "%(playlist_title)s - by %(playlist_uploader)s"
     else:
         print("[WORKER] Detected single video URL.")
+        playlist_folder_template = "singles"
 
     os.makedirs(output_path, exist_ok=True)
 
@@ -102,7 +104,7 @@ def download_youtube_url(
     command.extend([
         "--ignore-errors",
         "--yes-playlist" if is_playlist else "--no-playlist",
-        "-o", os.path.join(output_path, "%(playlist_title|singles)s", "%(title)s [%(id)s].%(ext)s"),
+        "-o", os.path.join(output_path, playlist_folder_template, "%(title)s [%(id)s].%(ext)s"),
         url,
     ])
 
