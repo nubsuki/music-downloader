@@ -24,17 +24,20 @@ docker-compose up -d
 Example:
 ```bash
 services:
-  app:
+  music-downloader:
     container_name: music-downloader
     image: ghcr.io/nubsuki/music-downloader:latest
     ports:
       - "5000:5000"
     environment:
-      MAX_WORKERS: "3"
-      DOWNLOADER_COOKIES_PATH: "/app/cookies.txt" # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp
+      - USE_DOWNLOAD_ARCHIVE=false # "false"- skips based on file existence | "true" - skips based on the archive txt (deleting the file will not re-download unless its ID is removed from the archive.)
+      - MAX_WORKERS=3
+      - DOWNLOADER_COOKIES_PATH=/app/cookies.txt # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp
+      - DOWNLOADER_CONFIG_DIR=/app/config # for configs to be stored archive.txt
     volumes:
       - mnt/drive1/downloads:/app/downloads
       - mnt/drive1/cookies.txt:/app/cookies.txt
+      - mnt/drive1/config:/app/config
     restart: unless-stopped
 
 ```

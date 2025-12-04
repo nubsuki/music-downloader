@@ -8,28 +8,14 @@ import concurrent.futures
 import state
 from dotenv import load_dotenv
 
-import platform
-
 load_dotenv()
 
-# Locate local ffmpeg folder
 try:
     script_path = os.path.abspath(__file__)
 except NameError:
     script_path = os.path.abspath(sys.argv[0])
 
 script_dir = os.path.dirname(script_path)
-
-# Local ffmpeg binary directory
-local_ffmpeg_bin_dir = os.path.join(script_dir, "ffmpeg", "bin")
-ffmpeg_binary_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
-local_ffmpeg_executable = os.path.join(local_ffmpeg_bin_dir, ffmpeg_binary_name)
-has_local_ffmpeg = os.path.isfile(local_ffmpeg_executable)
-
-if has_local_ffmpeg:
-    print(f"[INFO] Found local FFmpeg at: {local_ffmpeg_executable}")
-else:
-    print(f"[INFO] Local FFmpeg not found at {local_ffmpeg_executable}. using system FFmpeg.")
 
 # Global queue and worker configuration
 download_queue = queue.Queue()
@@ -50,6 +36,8 @@ if MAX_WORKERS != 3:
 # Cookies file path
 COOKIES_FILE_PATH = os.environ.get("DOWNLOADER_COOKIES_PATH") or None
 
+# Config file path
+CONFIG_DIR = os.environ.get("DOWNLOADER_CONFIG_DIR") or os.path.join(script_dir, "config")
 USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lower() in ("1", "true", "yes", "on")
 
 # Validate cookies path
@@ -80,14 +68,11 @@ def download_youtube_url(
         return
 
     os.makedirs(output_path, exist_ok=True)
-    archive_path = os.path.join(output_path, ".archive.txt")
 
     command = [
         "yt-dlp",
     ]
 
-    if has_local_ffmpeg:
-        command.append(f"--ffmpeg-location={local_ffmpeg_bin_dir}")
 
     if cookies_file_path:
         command.extend(["--cookies", cookies_file_path])
@@ -102,6 +87,8 @@ def download_youtube_url(
     ])
 
     if USE_DOWNLOAD_ARCHIVE:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        archive_path = os.path.join(CONFIG_DIR, ".archive.txt")
         command.extend(["--download-archive", archive_path])
 
     command.extend([
