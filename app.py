@@ -80,15 +80,16 @@ def downloaded_files():
 
     try:
         # Get only MP3 files
-        mp3_files = [
-            f
-            for f in os.listdir(DOWNLOADS_DIR)
-            if os.path.isfile(os.path.join(DOWNLOADS_DIR, f)) and f.lower().endswith('.mp3')
-        ]
-        
+        mp3_files = []
+        for root, _, files in os.walk(DOWNLOADS_DIR):
+            for f in files:
+                if f.lower().endswith(".mp3"):
+                    rel_path = os.path.relpath(os.path.join(root, f), DOWNLOADS_DIR)
+                    mp3_files.append(rel_path.replace(os.sep, "/"))
+
         # Count MP3 files
         mp3_count = len(mp3_files)
-        
+
         return jsonify({
             "files": sorted(mp3_files, reverse=True),
             "mp3_count": mp3_count

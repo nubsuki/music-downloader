@@ -217,7 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const filename = event.target.dataset.filename;
       if (!filename) return;
 
-      const audioSrc = `/downloads/${encodeURIComponent(filename)}`;
+      const audioSrc = `/downloads/${encodeURI(filename)}`;
       audioPlayer.src = audioSrc;
       audioPlayer.load();
       audioPlayer.play();

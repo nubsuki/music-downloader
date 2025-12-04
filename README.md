@@ -10,6 +10,8 @@ A web-based music downloader application built with yt-dlp.
 - **Docker Support**: Containerized deployment with Docker and Docker Compose
 - **Delete Functionality**: Enable or disable delete UI and API endpoints for downloaded files
 - **Download Archive**: Use an archive file to skip already downloaded files based on file existence
+- **Detects Playlists**: Automatically detects and create a folder named after the playlist and save all tracks in that folder.
+- **Detects Single Tracks**: If a URL points to a single track, it will be saved in the Single Tracks folder.
 
 
 ## Installation

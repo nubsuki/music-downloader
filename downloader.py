@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import threading
 import queue
 import concurrent.futures
@@ -60,12 +60,20 @@ def download_youtube_url(
 
     print(f"\n[WORKER] Starting download for: {url}")
 
-    if not urlparse(url).scheme:
+    parsed = urlparse(url)
+    if not parsed.scheme:
         err_msg = f"Invalid URL format for {url}. Skipping."
         print(f"[ERROR] {err_msg}")
         with state.status_lock:
             state.download_statuses[url] = f"failed: {err_msg}"
         return
+
+    qs = parse_qs(parsed.query)
+    is_playlist = parsed.path.startswith("/playlist") or ("list" in qs and not qs.get("v"))
+    if is_playlist:
+        print("[WORKER] Detected playlist URL.")
+    else:
+        print("[WORKER] Detected single video URL.")
 
     os.makedirs(output_path, exist_ok=True)
 
@@ -93,7 +101,8 @@ def download_youtube_url(
 
     command.extend([
         "--ignore-errors",
-        "-o", os.path.join(output_path, "%(title)s [%(id)s].%(ext)s"),
+        "--yes-playlist" if is_playlist else "--no-playlist",
+        "-o", os.path.join(output_path, "%(playlist_title|singles)s", "%(title)s [%(id)s].%(ext)s"),
         url,
     ])
 
