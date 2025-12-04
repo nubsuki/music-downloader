@@ -11,6 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadedList = document.getElementById("downloaded-list");
   const audioPlayer = document.getElementById("audio-player");
   const nowPlaying = document.getElementById("now-playing");
+  const cfgEl = document.getElementById("app-config");
+  window.APP_CONFIG = { enableDelete: !!(cfgEl && cfgEl.dataset.enableDelete === "true") };
 
   /**
    * Helper function to create a list item for a URL.
@@ -49,15 +51,10 @@ document.addEventListener("DOMContentLoaded", () => {
         li.appendChild(errorDetail);
       } else {
         li = createListItem(item, itemClass);
-        // add a delete button
+        // add play and delete buttons
         if (listElement.id === "downloaded-list") {
           const textSpan = document.createElement("span");
           textSpan.textContent = item;
-
-          const deleteButton = document.createElement("button");
-          deleteButton.textContent = "Delete";
-          deleteButton.className = "delete-button";
-          deleteButton.dataset.filename = item;
 
           const playButton = document.createElement("button");
           playButton.textContent = "Play";
@@ -67,7 +64,14 @@ document.addEventListener("DOMContentLoaded", () => {
           const buttonContainer = document.createElement("div");
           buttonContainer.className = "list-item-buttons";
           buttonContainer.appendChild(playButton);
-          buttonContainer.appendChild(deleteButton);
+
+          if (window.APP_CONFIG && window.APP_CONFIG.enableDelete) {
+            const deleteButton = document.createElement("button");
+            deleteButton.textContent = "Delete";
+            deleteButton.className = "delete-button";
+            deleteButton.dataset.filename = item;
+            buttonContainer.appendChild(deleteButton);
+          }
 
           li.innerHTML = "";
           li.appendChild(textSpan);
@@ -221,6 +225,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     if (event.target.classList.contains("delete-button")) {
+      if (!(window.APP_CONFIG && window.APP_CONFIG.enableDelete)) {
+        return;
+      }
+
       const filename = event.target.dataset.filename;
       if (!filename) return;
 

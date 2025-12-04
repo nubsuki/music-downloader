@@ -1,16 +1,15 @@
 # Music Downloader
 
-A web-based music downloader application built with yt-dlp, YouTube integration, and automatic audio conversion using FFmpeg.
+A web-based music downloader application built with yt-dlp.
 
 ## Features
 
 - **Web Interface**: Clean and Simple web UI for adding and monitoring downloads
 - **Concurrent Downloads**: Multiple simultaneous downloads with configurable worker count
-- **YouTube Support**: Download audio from YouTube videos
-- **FFmpeg Integration**: Automatic audio conversion to MP3 format
 - **Real-time Status**: Live download progress and status updates
 - **Docker Support**: Containerized deployment with Docker and Docker Compose
-- **Cross-platform**: Works on Windows, Linux, and macOS
+- **Delete Functionality**: Enable or disable delete UI and API endpoints for downloaded files
+- **Download Archive**: Use an archive file to skip already downloaded files based on file existence
 
 
 ## Installation
@@ -30,6 +29,7 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - ENABLE_DELETE=false # toggle delete UI and API
       - USE_DOWNLOAD_ARCHIVE=false # "false"- skips based on file existence | "true" - skips based on the archive txt (deleting the file will not re-download unless its ID is removed from the archive.)
       - MAX_WORKERS=3
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp

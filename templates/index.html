@@ -54,6 +54,7 @@
         <ul id="downloaded-list"></ul>
       </div>
     </div>
+    <div id="app-config" data-enable-delete="{{ 'true' if enable_delete else 'false' }}" style="display:none"></div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <footer id="player-footer">
       <div id="now-playing">No song selected</div>

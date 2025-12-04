@@ -25,7 +25,7 @@ worker_thread.start()
 @app.route("/")
 def index():
     """Serves the main HTML page."""
-    return render_template("index.html")
+    return render_template("index.html", enable_delete=ENABLE_DELETE)
 
 
 @app.route("/api/add_url", methods=["POST"])
@@ -69,7 +69,7 @@ def status():
 
 
 DOWNLOADS_DIR = "downloads"
-
+ENABLE_DELETE = os.environ.get("ENABLE_DELETE", "false").lower() == "true"
 
 @app.route("/api/downloaded_files")
 def downloaded_files():
@@ -100,6 +100,9 @@ def downloaded_files():
 @app.route("/api/delete_file", methods=["POST"])
 def delete_file():
     """Deletes a file from the downloads directory."""
+    if not ENABLE_DELETE:
+        return jsonify({"success": False, "error": "Delete functionality is disabled."}), 403
+
     data = request.get_json()
     filename = data.get("filename")
 
