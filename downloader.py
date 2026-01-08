@@ -164,6 +164,11 @@ def download_spotify_url(url: str, output_path: str = "downloads"):
         os.path.join(spotify_output_path, output_template)
     ]
 
+    if USE_DOWNLOAD_ARCHIVE:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        archive_path = os.path.join(CONFIG_DIR, ".archive.txt")
+        command.extend(["--archive", archive_path])
+
     # Add Spotify credentials if available to avoid rate limits
     client_id = os.environ.get("SPOTIPY_CLIENT_ID")
     client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
