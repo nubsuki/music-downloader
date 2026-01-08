@@ -1,6 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("url-form");
   const urlInput = document.getElementById("url-input");
+  const spotifyForm = document.getElementById("spotify-form");
+  const spotifyUrlInput = document.getElementById("spotify-url-input");
   const messageContainer = document.getElementById("message-container");
 
   // Get references to the new status lists
@@ -187,6 +189,42 @@ document.addEventListener("DOMContentLoaded", () => {
       displayMessage(error.message, "error");
     }
   });
+
+  // Event Listener for Spotify form submission
+  if (spotifyForm) {
+    spotifyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const url = spotifyUrlInput.value.trim();
+
+      if (!url) {
+        displayMessage("Please enter a Spotify URL.", "error");
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/add_spotify_url", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: url }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to add Spotify URL.");
+        }
+
+        displayMessage("Spotify URL successfully added to the queue!");
+        spotifyUrlInput.value = ""; // Clear the input field
+        updateStatus(); // Update status immediately
+      } catch (error) {
+        console.error("Error submitting Spotify URL:", error);
+        displayMessage(error.message, "error");
+      }
+    });
+  }
 
   // Event listener for the downloaded files search bar
   const downloadedSearchInput = document.getElementById(

@@ -40,9 +40,26 @@ def add_url():
     with state.status_lock:
         state.download_statuses[url] = "queued"
 
-    downloader.download_queue.put(url)
+    downloader.download_queue.put({"type": "youtube", "url": url})
 
     return jsonify({"success": True, "message": "URL added to queue."})
+
+
+@app.route("/api/add_spotify_url", methods=["POST"])
+def add_spotify_url():
+    """Adds a Spotify URL to the download queue."""
+    data = request.get_json()
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"success": False, "error": "URL is required."}), 400
+
+    with state.status_lock:
+        state.download_statuses[url] = "queued"
+
+    downloader.download_queue.put({"type": "spotify", "url": url})
+
+    return jsonify({"success": True, "message": "Spotify URL added to queue."})
 
 
 @app.route("/api/status")

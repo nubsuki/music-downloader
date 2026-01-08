@@ -110,20 +110,72 @@ def download_youtube_url(
 
     try:
         subprocess.run(
-            command, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace'
+            command, check=True, capture_output=False, text=True, encoding='utf-8', errors='replace'
         )
         print(f"\n[SUCCESS] Finished download for: {url}")
         with state.status_lock:
             state.download_statuses[url] = "completed"
 
     except subprocess.CalledProcessError as e:
-        err_msg = f"Download failed (yt-dlp exited with code {e.returncode}). Stderr: {e.stderr}"
+        err_msg = f"Download failed (yt-dlp exited with code {e.returncode}). Check console for details."
         print(f"\n[ERROR] {err_msg}")
         with state.status_lock:
             state.download_statuses[url] = f"failed: {err_msg}"
     except FileNotFoundError:
         err_msg = "'yt-dlp' command not found."
         print(f"\n[ERROR] {err_msg} Cannot process {url}.")
+        with state.status_lock:
+            state.download_statuses[url] = f"failed: {err_msg}"
+    except Exception as e:
+        err_msg = f"An unexpected error occurred: {e}"
+        print(f"\n[ERROR] {err_msg} while downloading {url}")
+        with state.status_lock:
+            state.download_statuses[url] = f"failed: {err_msg}"
+
+
+def download_spotify_url(url: str, output_path: str = "downloads"):
+    """
+    Downloads a song/playlist from a given Spotify URL using spotdl.
+    """
+    with state.status_lock:
+        state.download_statuses[url] = "downloading"
+
+    print(f"\n[WORKER] Starting Spotify download for: {url}")
+
+    # Separate folder for Spotify downloads
+    spotify_output_path = os.path.join(output_path, "spotify")
+    os.makedirs(spotify_output_path, exist_ok=True)
+
+    command = [
+        "spotdl",
+        "download",
+        url,
+        "--output",
+        os.path.join(spotify_output_path, "{artist} - {title}")
+    ]
+
+    # Add Spotify credentials if available to avoid rate limits
+    client_id = os.environ.get("SPOTIPY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
+    if client_id and client_secret:
+        command.extend(["--client-id", client_id, "--client-secret", client_secret])
+
+    try:
+        subprocess.run(
+            command, check=True, capture_output=False, text=True, encoding='utf-8', errors='replace'
+        )
+        print(f"\n[SUCCESS] Finished Spotify download for: {url}")
+        with state.status_lock:
+            state.download_statuses[url] = "completed"
+
+    except subprocess.CalledProcessError as e:
+        err_msg = f"Download failed (spotdl exited with code {e.returncode}). Check console for details."
+        print(f"\n[ERROR] {err_msg}")
+        with state.status_lock:
+            state.download_statuses[url] = f"failed: {err_msg}"
+    except FileNotFoundError:
+        err_msg = "'spotdl' command not found. Please install it (pip install spotdl)."
+        print(f"\n[ERROR] {err_msg}")
         with state.status_lock:
             state.download_statuses[url] = f"failed: {err_msg}"
     except Exception as e:
@@ -140,8 +192,20 @@ def queue_worker_loop(
     print(f"[QUEUE] Worker loop started with {MAX_WORKERS} max concurrent threads.")
     while True:
         try:
-            url = q.get(timeout=1)
-            future = executor.submit(download_youtube_url, url, cookies_file_path)
+            item = q.get(timeout=1)
+            
+            if isinstance(item, dict):
+                url = item.get("url")
+                job_type = item.get("type", "youtube")
+            else:
+                url = item
+                job_type = "youtube"
+
+            if job_type == "spotify":
+                future = executor.submit(download_spotify_url, url)
+            else:
+                future = executor.submit(download_youtube_url, url, cookies_file_path)
+                
             future.add_done_callback(lambda _: q.task_done())
 
         except queue.Empty:
