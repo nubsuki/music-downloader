@@ -62,6 +62,34 @@ def add_spotify_url():
     return jsonify({"success": True, "message": "Spotify URL added to queue."})
 
 
+@app.route("/api/download", methods=["GET", "POST"])
+def unified_download():
+    """
+    Unified endpoint to add a URL (YouTube or Spotify) to the queue.
+    Supports GET/POST with query param 'url', form data, or JSON body.
+    """
+    url = None
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if data:
+            url = data.get("url")
+
+    if not url:
+        url = request.values.get("url")
+
+    if not url:
+        return jsonify({"success": False, "error": "URL is required."}), 400
+
+    job_type = "spotify" if "spotify.com" in url or "spotify:" in url else "youtube"
+
+    with state.status_lock:
+        state.download_statuses[url] = "queued"
+
+    downloader.download_queue.put({"type": job_type, "url": url})
+
+    return jsonify({"success": True, "message": f"URL added to {job_type} queue."})
+
+
 @app.route("/api/status")
 def status():
     """Returns a detailed list of all downloads and their statuses."""
