@@ -12,6 +12,7 @@ A web-based music downloader application built with yt-dlp.
 - **Download Archive**: Use an archive file to skip already downloaded files based on file existence
 - **Detects Playlists**: Automatically detects and create a folder named after the playlist and save all tracks in that folder.
 - **Detects Single Tracks**: If a URL points to a single track, it will be saved in the Single Tracks folder.
+- **API: /api/download** - A simple endpoint users or other apps can call to add URL to the download queue.
 
 
 ## Installation
@@ -50,6 +51,7 @@ services:
 1. Open your browser and navigate to `http://localhost:5000`
 2. Paste YouTube URL in the input field
 3. Click "Add to Queue" to start downloads
+4. Api - http://localhost:5000/api/download?url=<URL>
 
 ## Disclaimer
 
