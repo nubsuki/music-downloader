@@ -36,6 +36,8 @@ services:
       - MAX_WORKERS=3
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # for 18+ download support more info check https://github.com/yt-dlp/yt-dlp
       - DOWNLOADER_CONFIG_DIR=/app/config # for configs to be stored archive.txt
+      - SPOTIPY_CLIENT_ID=your_spotify_client_id_here
+      - SPOTIPY_CLIENT_SECRET=your_spotify_client_secret_here
     volumes:
       - mnt/drive1/downloads:/app/downloads
       - mnt/drive1/config:/app/config

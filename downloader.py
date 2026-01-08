@@ -77,7 +77,9 @@ def download_youtube_url(
         print("[WORKER] Detected single video URL.")
         playlist_folder_template = "singles"
 
-    os.makedirs(output_path, exist_ok=True)
+    # Separate folder for YouTube downloads
+    youtube_output_path = os.path.join(output_path, "youtube")
+    os.makedirs(youtube_output_path, exist_ok=True)
 
     command = [
         "yt-dlp",
@@ -104,7 +106,7 @@ def download_youtube_url(
     command.extend([
         "--ignore-errors",
         "--yes-playlist" if is_playlist else "--no-playlist",
-        "-o", os.path.join(output_path, playlist_folder_template, "%(title)s [%(id)s].%(ext)s"),
+        "-o", os.path.join(youtube_output_path, playlist_folder_template, "%(title)s [%(id)s].%(ext)s"),
         url,
     ])
 
@@ -146,12 +148,20 @@ def download_spotify_url(url: str, output_path: str = "downloads"):
     spotify_output_path = os.path.join(output_path, "spotify")
     os.makedirs(spotify_output_path, exist_ok=True)
 
+    # Determine output template based on URL type
+    if "/track/" in url or ":track:" in url:
+        # Single track -> spotify/singles/Artist - Title
+        output_template = os.path.join("singles", "{title}")
+    else:
+        # Playlist, Album, or Artist -> spotify/PlaylistName/Artist - Title
+        output_template = os.path.join("{list-name} by {artist}", "{title}")
+
     command = [
         "spotdl",
         "download",
         url,
         "--output",
-        os.path.join(spotify_output_path, "{artist} - {title}")
+        os.path.join(spotify_output_path, output_template)
     ]
 
     # Add Spotify credentials if available to avoid rate limits
