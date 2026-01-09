@@ -150,7 +150,7 @@ def download_youtube_url(
                 target_dir = os.path.join(youtube_output_path, playlist_folder_name)
                 if os.path.isdir(target_dir):
                     mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith('.mp3')])
-                    if len(mp3_files) > 1:
+                    if len(mp3_files) > 0:
                         m3u_path = os.path.join(target_dir, f"{playlist_folder_name}.m3u")
                         with open(m3u_path, 'w', encoding='utf-8') as f:
                             f.write("#EXTM3U\n")
@@ -282,7 +282,8 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
             except Exception as e:
                 print(f"[WARNING] Failed to process m3u file: {e}")
             finally:
-                shutil.rmtree(m3u_temp_dir)
+                if m3u_temp_dir and os.path.exists(m3u_temp_dir):
+                    shutil.rmtree(m3u_temp_dir)
 
     except subprocess.CalledProcessError as e:
         err_msg = f"Download failed (spotdl exited with code {e.returncode}). Check console for details."
