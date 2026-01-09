@@ -49,9 +49,23 @@ services:
 ## Usage
 
 1. Open your browser and navigate to `http://localhost:5000`
-2. Paste YouTube URL in the input field
+2. Paste YouTube or Spotify URL in the input field
 3. Click "Add to Queue" to start downloads
-4. Api - http://localhost:5000/api/download?url=<URL>
+
+## API
+
+**Endpoint:** `/api/download`
+**Methods:** `GET`, `POST`
+
+### GET Example
+```bash
+curl "http://localhost:5000/api/download?url=https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+### POST Example (JSON)
+```bash
+curl -X POST http://localhost:5000/api/download -H "Content-Type: application/json" -d '{"url": "https://open.spotify.com/playlist/ID", "create_m3u": true}'
+```
 
 ## Disclaimer
 
