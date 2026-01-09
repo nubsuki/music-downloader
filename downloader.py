@@ -149,13 +149,14 @@ def download_youtube_url(
             try:
                 target_dir = os.path.join(youtube_output_path, playlist_folder_name)
                 if os.path.isdir(target_dir):
-                    m3u_path = os.path.join(target_dir, f"{playlist_folder_name}.m3u")
                     mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith('.mp3')])
-                    with open(m3u_path, 'w', encoding='utf-8') as f:
-                        f.write("#EXTM3U\n")
-                        for mp3 in mp3_files:
-                            f.write(f"{mp3}\n")
-                    print(f"[INFO] Created m3u playlist: {m3u_path}")
+                    if len(mp3_files) > 1:
+                        m3u_path = os.path.join(target_dir, f"{playlist_folder_name}.m3u")
+                        with open(m3u_path, 'w', encoding='utf-8') as f:
+                            f.write("#EXTM3U\n")
+                            for mp3 in mp3_files:
+                                f.write(f"{mp3}\n")
+                        print(f"[INFO] Created m3u playlist: {m3u_path}")
             except Exception as e:
                 print(f"[ERROR] Failed to create m3u playlist: {e}")
 
@@ -255,7 +256,7 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
                     
                     song_lines = [l.strip() for l in lines if l.strip() and not l.startswith('#')]
                     
-                    if song_lines:
+                    if song_lines and len(song_lines) > 1:
                         # Find where this song is in the spotify output directory
                         first_song_name = os.path.basename(song_lines[0])
                         found_dir = None
