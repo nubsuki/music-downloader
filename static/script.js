@@ -160,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const url = urlInput.value.trim();
+    const createM3u = document.getElementById("create-m3u-checkbox")?.checked || false;
 
     if (!url) {
       displayMessage("Please enter a URL.", "error");
@@ -172,7 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: url }),
+        body: JSON.stringify({ url: url, create_m3u: createM3u }),
       });
 
       const data = await response.json();
@@ -195,6 +196,7 @@ document.addEventListener("DOMContentLoaded", () => {
     spotifyForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const url = spotifyUrlInput.value.trim();
+      const createM3u = document.getElementById("spotify-create-m3u-checkbox")?.checked || false;
 
       if (!url) {
         displayMessage("Please enter a Spotify URL.", "error");
@@ -207,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ url: url }),
+          body: JSON.stringify({ url: url, create_m3u: createM3u }),
         });
 
         const data = await response.json();

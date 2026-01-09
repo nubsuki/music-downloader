@@ -33,6 +33,7 @@ def add_url():
     """Adds a URL to the download queue and registers its status."""
     data = request.get_json()
     url = data.get("url")
+    create_m3u = data.get("create_m3u", False)
 
     if not url:
         return jsonify({"success": False, "error": "URL is required."}), 400
@@ -40,7 +41,7 @@ def add_url():
     with state.status_lock:
         state.download_statuses[url] = "queued"
 
-    downloader.download_queue.put({"type": "youtube", "url": url})
+    downloader.download_queue.put({"type": "youtube", "url": url, "create_m3u": create_m3u})
 
     return jsonify({"success": True, "message": "URL added to queue."})
 
@@ -50,6 +51,7 @@ def add_spotify_url():
     """Adds a Spotify URL to the download queue."""
     data = request.get_json()
     url = data.get("url")
+    create_m3u = data.get("create_m3u", False)
 
     if not url:
         return jsonify({"success": False, "error": "URL is required."}), 400
@@ -57,7 +59,7 @@ def add_spotify_url():
     with state.status_lock:
         state.download_statuses[url] = "queued"
 
-    downloader.download_queue.put({"type": "spotify", "url": url})
+    downloader.download_queue.put({"type": "spotify", "url": url, "create_m3u": create_m3u})
 
     return jsonify({"success": True, "message": "Spotify URL added to queue."})
 
@@ -69,10 +71,12 @@ def unified_download():
     Supports GET/POST with query param 'url', form data, or JSON body.
     """
     url = None
+    create_m3u = False
     if request.is_json:
         data = request.get_json(silent=True)
         if data:
             url = data.get("url")
+            create_m3u = data.get("create_m3u", False)
 
     if not url:
         url = request.values.get("url")
@@ -85,7 +89,7 @@ def unified_download():
     with state.status_lock:
         state.download_statuses[url] = "queued"
 
-    downloader.download_queue.put({"type": job_type, "url": url})
+    downloader.download_queue.put({"type": job_type, "url": url, "create_m3u": create_m3u})
 
     return jsonify({"success": True, "message": f"URL added to {job_type} queue."})
 

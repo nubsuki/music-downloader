@@ -104,6 +104,19 @@ h1 {
   box-shadow: var(--input-focus-shadow);
 }
 
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-color);
+  cursor: pointer;
+  background-color: var(--item-bg-color);
+  padding: 0 0.75rem;
+  border: 1px solid var(--input-border-color);
+  border-radius: 4px;
+  user-select: none;
+}
+
 button {
   padding: 0.75rem 1.5rem;
   border: none;
