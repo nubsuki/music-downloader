@@ -1,6 +1,7 @@
 import concurrent.futures
 import os
 import threading
+from urllib.parse import urlparse
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from waitress import serve
 import downloader
@@ -84,7 +85,14 @@ def unified_download():
     if not url:
         return jsonify({"success": False, "error": "URL is required."}), 400
 
-    job_type = "spotify" if "spotify.com" in url or "spotify:" in url else "youtube"
+    parsed = urlparse(url)
+    hostname = parsed.hostname.lower() if parsed.hostname else ""
+    is_spotify = (
+        parsed.scheme == "spotify" or
+        hostname == "spotify.com" or
+        hostname.endswith(".spotify.com")
+    )
+    job_type = "spotify" if is_spotify else "youtube"
 
     with state.status_lock:
         state.download_statuses[url] = "queued"
