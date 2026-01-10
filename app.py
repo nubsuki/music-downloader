@@ -29,42 +29,6 @@ def index():
     return render_template("index.html", enable_delete=ENABLE_DELETE)
 
 
-@app.route("/api/add_url", methods=["POST"])
-def add_url():
-    """Adds a URL to the download queue and registers its status."""
-    data = request.get_json()
-    url = data.get("url")
-    create_m3u = data.get("create_m3u", False)
-
-    if not url:
-        return jsonify({"success": False, "error": "URL is required."}), 400
-
-    with state.status_lock:
-        state.download_statuses[url] = "queued"
-
-    downloader.download_queue.put({"type": "youtube", "url": url, "create_m3u": create_m3u})
-
-    return jsonify({"success": True, "message": "URL added to queue."})
-
-
-@app.route("/api/add_spotify_url", methods=["POST"])
-def add_spotify_url():
-    """Adds a Spotify URL to the download queue."""
-    data = request.get_json()
-    url = data.get("url")
-    create_m3u = data.get("create_m3u", False)
-
-    if not url:
-        return jsonify({"success": False, "error": "URL is required."}), 400
-
-    with state.status_lock:
-        state.download_statuses[url] = "queued"
-
-    downloader.download_queue.put({"type": "spotify", "url": url, "create_m3u": create_m3u})
-
-    return jsonify({"success": True, "message": "Spotify URL added to queue."})
-
-
 @app.route("/api/download", methods=["GET", "POST"])
 def unified_download():
     """

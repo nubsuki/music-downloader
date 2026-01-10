@@ -1,8 +1,9 @@
+import json
 import os
+import re
 import subprocess
 import sys
 from urllib.parse import urlparse, parse_qs
-import threading
 import queue
 import concurrent.futures
 import state
@@ -49,6 +50,219 @@ if COOKIES_FILE_PATH and not os.path.exists(COOKIES_FILE_PATH):
 elif COOKIES_FILE_PATH:
     print(f"[INFO] Using cookies file: {COOKIES_FILE_PATH}")
 
+
+def _build_youtube_id_index(youtube_output_path: str) -> dict:
+    id_to_path = {}
+    for root, _, files in os.walk(youtube_output_path):
+        for fn in files:
+            if not fn.lower().endswith(".mp3"):
+                continue
+            m = re.search(r"\[([A-Za-z0-9_-]{11})\]\.mp3$", fn)
+            if not m:
+                continue
+            id_to_path[m.group(1)] = os.path.join(root, fn)
+    return id_to_path
+
+
+def _yt_dlp_get_expected_playlist_files(
+    url: str,
+    cookies_file_path: str,
+    youtube_output_path: str,
+    file_template: str,
+) -> list:
+    cmd = [
+        "yt-dlp",
+        "--get-filename",
+        "--skip-download",
+        "--ignore-errors",
+        "--yes-playlist",
+        "-o",
+        os.path.join(youtube_output_path, file_template),
+    ]
+    if cookies_file_path:
+        cmd.extend(["--cookies", cookies_file_path])
+    cmd.append(url)
+
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0 and not res.stdout.strip():
+        return []
+
+    return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+
+def create_youtube_playlist_m3u(
+    url: str,
+    cookies_file_path: str,
+    youtube_output_path: str,
+    playlist_name: str,
+    file_template: str,
+) -> None:
+    target_dir = youtube_output_path
+
+    expected_paths = _yt_dlp_get_expected_playlist_files(
+        url, cookies_file_path, youtube_output_path, file_template
+    )
+
+    id_index = _build_youtube_id_index(youtube_output_path)
+
+    entries = []
+    for p in expected_paths:
+        base = os.path.basename(p)
+        m = re.search(r"\[([A-Za-z0-9_-]{11})\]\.mp3$", base)
+        vid = m.group(1) if m else None
+        entries.append((vid, base))
+
+    if not entries and os.path.isdir(target_dir):
+        mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith(".mp3")])
+        entries = [(None, f) for f in mp3_files]
+
+    m3u_path = os.path.join(target_dir, f"{playlist_name}.m3u")
+    with open(m3u_path, "w", encoding="utf-8") as f:
+        f.write("#EXTM3U\n")
+        for vid, expected_basename in entries:
+            actual_path = id_index.get(vid) if vid else None
+            if actual_path and os.path.exists(actual_path):
+                rel = os.path.relpath(actual_path, target_dir).replace("\\", "/")
+                f.write(f"{rel}\n")
+            else:
+                f.write(f"{expected_basename}\n")
+
+    print(f"[INFO] Created m3u playlist: {m3u_path}")
+
+
+def _sanitize_filename_component(name: str) -> str:
+    if name is None:
+        return ""
+    s = str(name)
+    s = re.sub(r"[<>:\"/\\|?*]", "_", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    s = s.rstrip(". ")
+    return s
+
+
+def _spotdl_save_query(
+    url: str,
+    save_file_path: str,
+    client_id: str,
+    client_secret: str,
+    cwd: str,
+) -> None:
+    cmd = ["spotdl", "save", url, "--save-file", save_file_path]
+    if client_id and client_secret:
+        cmd.extend(["--client-id", client_id, "--client-secret", client_secret])
+    subprocess.run(cmd, cwd=cwd, check=True, capture_output=False, text=True, encoding="utf-8", errors="replace")
+
+
+def _load_spotdl_save_file(save_file_path: str):
+    with open(save_file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _spotdl_extract_songs(save_data) -> list:
+    if isinstance(save_data, list):
+        return save_data
+    if isinstance(save_data, dict):
+        for k in ("songs", "items", "tracks", "urls"):
+            v = save_data.get(k)
+            if isinstance(v, list):
+                return v
+    return []
+
+
+def _spotdl_song_artist_title(song: dict) -> tuple:
+    title = song.get("title") or song.get("name")
+    artist = song.get("artist")
+    if not artist:
+        artists = song.get("artists")
+        if isinstance(artists, list) and artists:
+            a0 = artists[0]
+            if isinstance(a0, dict):
+                artist = a0.get("name")
+            else:
+                artist = str(a0)
+        elif isinstance(artists, str):
+            artist = artists.split(",")[0].strip()
+    return artist, title
+
+
+def _spotdl_song_track_id(song: dict) -> str:
+    tid = song.get("track_id") or song.get("track-id") or song.get("trackId")
+    if isinstance(tid, str) and tid:
+        return tid
+    return ""
+
+
+def _build_spotify_track_id_index(spotify_output_path: str) -> dict:
+    exts = {".mp3", ".m4a", ".opus", ".ogg", ".flac", ".wav"}
+    idx = {}
+    for root, _, files in os.walk(spotify_output_path):
+        for fn in files:
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in exts:
+                continue
+            m = re.search(r"\[([A-Za-z0-9]{22})\]", fn)
+            if not m:
+                continue
+            idx[m.group(1)] = os.path.join(root, fn)
+    return idx
+
+
+def create_spotify_m3u_from_save(save_file_path: str, spotify_output_path: str) -> None:
+    if not save_file_path or not os.path.exists(save_file_path):
+        return
+
+    save_data = _load_spotdl_save_file(save_file_path)
+    songs = _spotdl_extract_songs(save_data)
+
+    default_list_name = None
+    if isinstance(save_data, dict):
+        default_list_name = save_data.get("name") or save_data.get("list_name") or save_data.get("list-name")
+
+    groups = {}
+    for s in songs:
+        if not isinstance(s, dict):
+            continue
+        list_name = s.get("list_name") or s.get("list-name") or s.get("listName") or default_list_name
+        list_name = _sanitize_filename_component(list_name) or "playlist"
+
+        track_id = _spotdl_song_track_id(s)
+        if not track_id:
+            continue
+
+        artist, title = _spotdl_song_artist_title(s)
+        if not title:
+            continue
+
+        if artist:
+            base = _sanitize_filename_component(f"{artist} - {title} [{track_id}]")
+        else:
+            base = _sanitize_filename_component(f"{title} [{track_id}]")
+
+        if not base:
+            continue
+
+        groups.setdefault(list_name, []).append((track_id, f"{base}.mp3"))
+
+    if not groups:
+        return
+
+    id_index = _build_spotify_track_id_index(spotify_output_path)
+
+    for list_name, entries in groups.items():
+        m3u_path = os.path.join(spotify_output_path, f"{list_name}.m3u8")
+        with open(m3u_path, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            for track_id, expected_basename in entries:
+                actual_path = id_index.get(track_id)
+                if actual_path and os.path.exists(actual_path):
+                    rel = os.path.relpath(actual_path, spotify_output_path).replace("\\", "/")
+                    f.write(f"{rel}\n")
+                else:
+                    f.write(f"{expected_basename}\n")
+
+        print(f"[INFO] Created m3u playlist: {m3u_path}")
+
+
 def download_youtube_url(
     url: str, cookies_file_path: str, output_path: str = "downloads", create_m3u: bool = False
 ):
@@ -72,15 +286,16 @@ def download_youtube_url(
 
     qs = parse_qs(parsed.query)
     is_playlist = parsed.path.startswith("/playlist") or ("list" in qs and not qs.get("v"))
+    
+    # Unified file template (no numbering)
+    file_template = "%(title)s [%(id)s].%(ext)s"
+    playlist_name_template = None
+
     if is_playlist:
         print("[WORKER] Detected playlist URL.")
-        playlist_folder_template = "%(playlist_title)s - by %(playlist_uploader)s"
-        # Use index in filename for playlists to ensure correct order in m3u
-        file_template = "%(playlist_index)03d - %(title)s [%(id)s].%(ext)s"
+        playlist_name_template = "%(playlist_title)s - by %(playlist_uploader)s"
     else:
         print("[WORKER] Detected single video URL.")
-        playlist_folder_template = "singles"
-        file_template = "%(title)s [%(id)s].%(ext)s"
 
     # Separate folder for YouTube downloads
     youtube_output_path = os.path.join(output_path, "youtube")
@@ -90,15 +305,15 @@ def download_youtube_url(
         "yt-dlp",
     ]
 
-    # Determine playlist folder name ahead of time if we need to generate an m3u
-    playlist_folder_name = None
-    if is_playlist and create_m3u:
+    # Determine playlist name ahead of time if we need to generate an m3u
+    playlist_name = None
+    if is_playlist and create_m3u and playlist_name_template:
         try:
-            # Run yt-dlp to get the formatted folder name without downloading
+            # Run yt-dlp to get the formatted playlist name without downloading
             name_cmd = [
                 "yt-dlp",
                 "--get-filename",
-                "-o", playlist_folder_template,
+                "-o", playlist_name_template,
                 "--playlist-items", "1",
                 "--skip-download",
             ]
@@ -108,9 +323,9 @@ def download_youtube_url(
             
             res = subprocess.run(name_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             if res.returncode == 0:
-                playlist_folder_name = res.stdout.strip().split('\n')[0]
+                playlist_name = res.stdout.strip().split('\n')[0]
         except Exception as e:
-            print(f"[WARNING] Could not determine playlist folder name for m3u: {e}")
+            print(f"[WARNING] Could not determine playlist name for m3u: {e}")
 
     if cookies_file_path:
         command.extend(["--cookies", cookies_file_path])
@@ -132,7 +347,8 @@ def download_youtube_url(
     command.extend([
         "--ignore-errors",
         "--yes-playlist" if is_playlist else "--no-playlist",
-        "-o", os.path.join(youtube_output_path, playlist_folder_template, file_template),
+        "-o",
+        os.path.join(youtube_output_path, file_template),
         url,
     ])
 
@@ -144,19 +360,15 @@ def download_youtube_url(
         with state.status_lock:
             state.download_statuses[url] = "completed"
             
-        # Generate m3u playlist if requested
-        if is_playlist and create_m3u and playlist_folder_name:
+        if is_playlist and create_m3u and playlist_name:
             try:
-                target_dir = os.path.join(youtube_output_path, playlist_folder_name)
-                if os.path.isdir(target_dir):
-                    mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith('.mp3')])
-                    if len(mp3_files) > 0:
-                        m3u_path = os.path.join(target_dir, f"{playlist_folder_name}.m3u")
-                        with open(m3u_path, 'w', encoding='utf-8') as f:
-                            f.write("#EXTM3U\n")
-                            for mp3 in mp3_files:
-                                f.write(f"{mp3}\n")
-                        print(f"[INFO] Created m3u playlist: {m3u_path}")
+                create_youtube_playlist_m3u(
+                    url,
+                    cookies_file_path,
+                    youtube_output_path,
+                    playlist_name,
+                    file_template,
+                )
             except Exception as e:
                 print(f"[ERROR] Failed to create m3u playlist: {e}")
 
@@ -186,104 +398,61 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
 
     print(f"\n[WORKER] Starting Spotify download for: {url}")
 
-    # Separate folder for Spotify downloads
-    # Use absolute path to ensure spotdl finds it even if we change CWD
     spotify_output_path = os.path.abspath(os.path.join(output_path, "spotify"))
     os.makedirs(spotify_output_path, exist_ok=True)
 
     is_single = "/track/" in url or ":track:" in url
 
-    # Determine output template based on URL type
-    if is_single:
-        # Single track -> spotify/singles/Artist - Title
-        output_template = os.path.join("singles", "{title}")
-    else:
-        # Playlist, Album, or Artist -> spotify/PlaylistName/Artist - Title
-        output_template = os.path.join("{list-name}", "{artist} - {title}")
-        
+    output_template = "{artist} - {title} [{track-id}].{output-ext}"
+
+    client_id = os.environ.get("SPOTIPY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
+
+    save_temp_dir = None
+    save_file_path = None
+    if create_m3u and not is_single:
+        save_temp_dir = tempfile.mkdtemp()
+        save_file_path = os.path.join(save_temp_dir, "_query.spotdl")
+        try:
+            _spotdl_save_query(url, "_query.spotdl", client_id, client_secret, save_temp_dir)
+        except Exception as e:
+            print(f"[WARNING] Failed to save Spotify metadata for m3u generation: {e}")
+            save_file_path = None
 
     command = [
         "spotdl",
         "download",
         url,
         "--output",
-        os.path.join(spotify_output_path, output_template)
+        os.path.join(spotify_output_path, output_template),
     ]
-
-    m3u_temp_dir = None
-    # Add m3u generation if requested and it's not a single track
-    if create_m3u and not is_single:
-        m3u_temp_dir = tempfile.mkdtemp()
-        # Use a static name to avoid template errors with spotdl (e.g. when downloading albums)
-        command.extend(["--m3u", "_playlist.m3u8"])
 
     if USE_DOWNLOAD_ARCHIVE:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         archive_path = os.path.join(CONFIG_DIR, ".archive.txt")
         command.extend(["--archive", archive_path])
 
-    # Add Spotify credentials if available to avoid rate limits
-    client_id = os.environ.get("SPOTIPY_CLIENT_ID")
-    client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
     if client_id and client_secret:
         command.extend(["--client-id", client_id, "--client-secret", client_secret])
 
     try:
         subprocess.run(
-            command, 
-            cwd=m3u_temp_dir if m3u_temp_dir else None,
-            check=True, 
-            capture_output=False, 
-            text=True, 
-            encoding='utf-8', 
-            errors='replace'
+            command,
+            check=True,
+            capture_output=False,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         print(f"\n[SUCCESS] Finished Spotify download for: {url}")
         with state.status_lock:
             state.download_statuses[url] = "completed"
-            
-        # Post-process m3u: Move it from temp dir to the actual album folder
-        if m3u_temp_dir:
-            try:
-                m3u_files = [f for f in os.listdir(m3u_temp_dir) if f.endswith('.m3u8')]
-                if m3u_files:
-                    m3u_filename = m3u_files[0]
-                    m3u_src_path = os.path.join(m3u_temp_dir, m3u_filename)
-                    
-                    # Read m3u to find the first song filename to locate the folder
-                    with open(m3u_src_path, 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                    
-                    song_lines = [l.strip() for l in lines if l.strip() and not l.startswith('#')]
-                    
-                    if song_lines and len(song_lines) > 1:
-                        # Find where this song is in the spotify output directory
-                        first_song_name = os.path.basename(song_lines[0])
-                        found_dir = None
-                        for root, dirs, files in os.walk(spotify_output_path):
-                            if first_song_name in files:
-                                found_dir = root
-                                break
-                        
-                        if found_dir:
-                            # Use the folder name (which contains Album/Playlist title) for the m3u filename
-                            folder_name = os.path.basename(found_dir)
-                            final_m3u_name = f"{folder_name}.m3u8"
 
-                            # Rewrite m3u with simple filenames (relative paths) and save to dest
-                            dest_path = os.path.join(found_dir, final_m3u_name)
-                            with open(dest_path, 'w', encoding='utf-8') as f:
-                                for line in lines:
-                                    if line.strip() and not line.startswith('#'):
-                                        f.write(f"{os.path.basename(line.strip())}\n")
-                                    else:
-                                        f.write(line)
-                            print(f"[INFO] Moved and updated m3u playlist to: {dest_path}")
+        if create_m3u and not is_single:
+            try:
+                create_spotify_m3u_from_save(save_file_path, spotify_output_path)
             except Exception as e:
-                print(f"[WARNING] Failed to process m3u file: {e}")
-            finally:
-                if m3u_temp_dir and os.path.exists(m3u_temp_dir):
-                    shutil.rmtree(m3u_temp_dir)
+                print(f"[WARNING] Failed to create Spotify m3u playlist: {e}")
 
     except subprocess.CalledProcessError as e:
         err_msg = f"Download failed (spotdl exited with code {e.returncode}). Check console for details."
@@ -300,6 +469,9 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
         print(f"\n[ERROR] {err_msg} while downloading {url}")
         with state.status_lock:
             state.download_statuses[url] = f"failed: {err_msg}"
+    finally:
+        if save_temp_dir and os.path.exists(save_temp_dir):
+            shutil.rmtree(save_temp_dir)
 
 
 def queue_worker_loop(

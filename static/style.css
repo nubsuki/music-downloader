@@ -82,13 +82,13 @@ h1 {
   vertical-align: middle;
 }
 
-#url-form, #spotify-form {
+#url-form {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 2rem;
 }
 
-#url-input, #spotify-url-input {
+#url-input {
   flex-grow: 1;
   padding: 0.75rem;
   border: 1px solid var(--input-border-color);
@@ -98,7 +98,7 @@ h1 {
   font-size: 1rem;
 }
 
-#url-input:focus, #spotify-url-input:focus {
+#url-input:focus {
   outline: none;
   border-color: var(--input-focus-border-color);
   box-shadow: var(--input-focus-shadow);
@@ -130,13 +130,6 @@ button {
 
 button:hover {
   background-color: var(--button-hover-bg-color);
-}
-
-.spotify-btn {
-  background-color: #1DB954;
-}
-.spotify-btn:hover {
-  background-color: #1ed760;
 }
 
 #message-container {
