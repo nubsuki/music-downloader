@@ -375,26 +375,43 @@ def download_youtube_url(
     ])
 
     try:
-        subprocess.run(
-            command, check=True, capture_output=False, text=True, encoding='utf-8', errors='replace'
+        # Run yt-dlp with check=False to allow playlist processing even if some videos fail
+        res = subprocess.run(
+            command, check=False, capture_output=False, text=True, encoding='utf-8', errors='replace'
         )
-        print(f"\n[SUCCESS] Finished download for: {url}")
-        with state.status_lock:
-            state.download_statuses[url] = "completed"
-            
-        if is_playlist and create_m3u and playlist_name:
+
+        if res.returncode == 0:
+            print(f"\n[SUCCESS] Finished download for: {url}")
+            with state.status_lock:
+                state.download_statuses[url] = "completed"
+        else:
+            if is_playlist:
+                print(f"\n[WARNING] Playlist download finished with exit code {res.returncode}. Proceeding to m3u generation.")
+                with state.status_lock:
+                    state.download_statuses[url] = "completed_with_errors"
+            else:
+                err_msg = f"Download failed (yt-dlp exited with code {res.returncode}). Check console for details."
+                print(f"\n[ERROR] {err_msg}")
+                with state.status_lock:
+                    state.download_statuses[url] = f"failed: {err_msg}"
+                return
+
+        # Always try to create m3u for playlists, even if download had errors or name fetch failed
+        if is_playlist and create_m3u:
+            final_playlist_name = playlist_name or "Playlist"
             try:
                 create_youtube_playlist_m3u(
                     url,
                     cookies_file_path,
                     youtube_output_path,
-                    playlist_name,
+                    final_playlist_name,
                     file_template,
                 )
             except Exception as e:
                 print(f"[ERROR] Failed to create m3u playlist: {e}")
 
     except subprocess.CalledProcessError as e:
+        # Should not be reached with check=False, but kept for safety
         err_msg = f"Download failed (yt-dlp exited with code {e.returncode}). Check console for details."
         print(f"\n[ERROR] {err_msg}")
         with state.status_lock:
@@ -472,18 +489,31 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
         command.extend(["--client-id", client_id, "--client-secret", client_secret])
 
     try:
-        subprocess.run(
+        res = subprocess.run(
             command,
             cwd=spotify_output_path,  # Run in the output directory
-            check=True,
+            check=False,
             capture_output=False,
             text=True,
             encoding="utf-8",
             errors="replace",
         )
-        print(f"\n[SUCCESS] Finished Spotify download for: {url}")
-        with state.status_lock:
-            state.download_statuses[url] = "completed"
+
+        if res.returncode == 0:
+            print(f"\n[SUCCESS] Finished Spotify download for: {url}")
+            with state.status_lock:
+                state.download_statuses[url] = "completed"
+        else:
+            if not is_single:
+                print(f"\n[WARNING] Spotify download finished with exit code {res.returncode}. Proceeding to m3u generation.")
+                with state.status_lock:
+                    state.download_statuses[url] = "completed_with_errors"
+            else:
+                err_msg = f"Download failed (spotdl exited with code {res.returncode}). Check console for details."
+                print(f"\n[ERROR] {err_msg}")
+                with state.status_lock:
+                    state.download_statuses[url] = f"failed: {err_msg}"
+                return
 
         # Create M3U
         if create_m3u and not is_single and save_file_path:
@@ -496,6 +526,7 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
                 print(f"[WARNING] Failed to create Spotify m3u playlist: {e}")
 
     except subprocess.CalledProcessError as e:
+        # Should not be reached with check=False
         err_msg = f"Download failed (spotdl exited with code {e.returncode}). Check console for details."
         print(f"\n[ERROR] {err_msg}")
         with state.status_lock:
