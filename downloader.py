@@ -146,12 +146,15 @@ def _sanitize_filename_component(name: str) -> str:
     s = str(name)
     
     if RESTRICT_FILENAMES:
-        # Transliterate unicode to ASCII (e.g. é -> e, 한글 -> han-geul or similar)
         s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+        s = re.sub(r"[^a-zA-Z0-9\.\-]", "_", s)
+        s = re.sub(r"_+", "_", s)
+
+    else:
+        s = re.sub(r"[<>:\"/\\|?*]", "_", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        s = s.rstrip(". ")
     
-    s = re.sub(r"[<>:\"/\\|?*]", "_", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    s = s.rstrip(". ")
     return s
 
 
