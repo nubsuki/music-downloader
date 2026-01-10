@@ -199,7 +199,7 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
         output_template = os.path.join("singles", "{title}")
     else:
         # Playlist, Album, or Artist -> spotify/PlaylistName/Artist - Title
-        output_template = os.path.join("{list-name} by {artist}", "{title}")
+        output_template = os.path.join("{list-name}", "{artist} - {title}")
         
 
     command = [
