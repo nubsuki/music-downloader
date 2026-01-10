@@ -10,6 +10,7 @@ import state
 from dotenv import load_dotenv
 import tempfile
 import shutil
+import unicodedata
 
 load_dotenv()
 
@@ -42,6 +43,8 @@ COOKIES_FILE_PATH = os.environ.get("DOWNLOADER_COOKIES_PATH") or None
 # Config file path
 CONFIG_DIR = os.environ.get("DOWNLOADER_CONFIG_DIR") or os.path.join(script_dir, "config")
 USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lower() in ("1", "true", "yes", "on")
+
+RESTRICT_FILENAMES = str(os.environ.get("RESTRICT_FILENAMES", "false")).lower() in ("1", "true", "yes", "on")
 
 # Validate cookies path
 if COOKIES_FILE_PATH and not os.path.exists(COOKIES_FILE_PATH):
@@ -79,6 +82,10 @@ def _yt_dlp_get_expected_playlist_files(
         "-o",
         os.path.join(youtube_output_path, file_template),
     ]
+    
+    if RESTRICT_FILENAMES:
+        cmd.append("--restrict-filenames")
+        
     if cookies_file_path:
         cmd.extend(["--cookies", cookies_file_path])
     cmd.append(url)
@@ -119,16 +126,16 @@ def create_youtube_playlist_m3u(
         mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith(".mp3")])
         entries = [(None, f) for f in mp3_files]
 
-    m3u_path = os.path.join(target_dir, f"{playlist_name}.m3u")
+    m3u_path = os.path.join(target_dir, f"{playlist_name}.m3u8")
     with open(m3u_path, "w", encoding="utf-8") as f:
         f.write("#EXTM3U\n")
         for vid, expected_basename in entries:
             actual_path = id_index.get(vid) if vid else None
             if actual_path and os.path.exists(actual_path):
                 rel = os.path.relpath(actual_path, target_dir).replace("\\", "/")
-                f.write(f"{rel}\n")
+                f.write(f"{unicodedata.normalize('NFC', rel)}\n")
             else:
-                f.write(f"{expected_basename}\n")
+                f.write(f"{unicodedata.normalize('NFC', expected_basename)}\n")
 
     print(f"[INFO] Created m3u playlist: {m3u_path}")
 
@@ -137,6 +144,11 @@ def _sanitize_filename_component(name: str) -> str:
     if name is None:
         return ""
     s = str(name)
+    
+    if RESTRICT_FILENAMES:
+        # Transliterate unicode to ASCII (e.g. é -> e, 한글 -> han-geul or similar)
+        s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+    
     s = re.sub(r"[<>:\"/\\|?*]", "_", s)
     s = re.sub(r"\s+", " ", s).strip()
     s = s.rstrip(". ")
@@ -254,13 +266,13 @@ def create_spotify_m3u_from_save(save_file_path: str, spotify_output_path: str) 
                 for track_id, song_data in entries:
                     # Use existing file if found
                     if track_id in track_id_map:
-                        f.write(f"{track_id_map[track_id]}\n")
+                        f.write(f"{unicodedata.normalize('NFC', track_id_map[track_id])}\n")
                     else:
-                        # Fallback to expected filename
+                        # strip artist as requested
                         _, title = _spotdl_song_artist_title(song_data)
                         if title:
                             base = _sanitize_filename_component(f"{title} [{track_id}]")
-                            f.write(f"{base}.mp3\n")
+                            f.write(f"{unicodedata.normalize('NFC', base)}.mp3\n")
 
             print(f"[INFO] Created m3u playlist: {m3u_path}")
         except Exception as e:
@@ -333,6 +345,9 @@ def download_youtube_url(
 
     if cookies_file_path:
         command.extend(["--cookies", cookies_file_path])
+
+    if RESTRICT_FILENAMES:
+        command.append("--restrict-filenames")
 
     command.extend([
         "-x",
@@ -441,6 +456,9 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
         output_template,
         "--format", "mp3",  # Explicitly enforce mp3
     ]
+
+    if RESTRICT_FILENAMES:
+        command.append("--restrict")
 
     if USE_DOWNLOAD_ARCHIVE:
         os.makedirs(CONFIG_DIR, exist_ok=True)
