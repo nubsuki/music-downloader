@@ -108,9 +108,12 @@ def create_youtube_playlist_m3u(
     entries = []
     for p in expected_paths:
         base = os.path.basename(p)
-        m = re.search(r"\[([A-Za-z0-9_-]{11})\]\.mp3$", base)
+        # Extract the video ID regardless of extension
+        m = re.search(r"\[([A-Za-z0-9_-]{11})\]", base)
         vid = m.group(1) if m else None
-        entries.append((vid, base))
+        # Ensure fallback basename uses .mp3
+        mp3_base = os.path.splitext(base)[0] + ".mp3"
+        entries.append((vid, mp3_base))
 
     if not entries and os.path.isdir(target_dir):
         mp3_files = sorted([f for f in os.listdir(target_dir) if f.lower().endswith(".mp3")])
