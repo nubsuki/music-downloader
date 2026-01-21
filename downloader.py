@@ -361,6 +361,7 @@ def download_youtube_url(
             # Ask yt-dlp for a formatted name (no download)
             name_cmd = [
                 "yt-dlp",
+                "--ignore-errors",
                 "--get-filename",
                 "-o", playlist_name_template,
                 "--playlist-items", "1",
