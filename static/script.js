@@ -3,11 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const urlInput = document.getElementById("url-input");
   const messageContainer = document.getElementById("message-container");
 
-  // Get references to the new status lists
-  const downloadingList = document.getElementById("downloading-list");
-  const queuedList = document.getElementById("queued-list");
-  const completedList = document.getElementById("completed-list");
-  const failedList = document.getElementById("failed-list");
+  const activityLog = document.getElementById("activity-log");
   const downloadedList = document.getElementById("downloaded-list");
   const audioPlayer = document.getElementById("audio-player");
   const nowPlaying = document.getElementById("now-playing");
@@ -43,65 +39,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     items.forEach((item) => {
       let li;
-      // Handle failed items as objects
-      if (typeof item === "object" && item.url) {
-        li = createListItem(item.url, itemClass);
-        const errorDetail = document.createElement("small");
-        errorDetail.textContent = item.error.replace("failed: ", "");
-        li.appendChild(errorDetail);
-      } else {
-        li = createListItem(item, itemClass);
-        // add play and delete buttons
-        if (listElement.id === "downloaded-list") {
-          const textSpan = document.createElement("span");
-          textSpan.textContent = item;
+      li = createListItem(item, itemClass);
+      if (listElement.id === "downloaded-list") {
+        const textSpan = document.createElement("span");
+        textSpan.textContent = item;
 
-          const playButton = document.createElement("button");
-          playButton.textContent = "Play";
-          playButton.className = "play-button";
-          playButton.dataset.filename = item;
+        const playButton = document.createElement("button");
+        playButton.textContent = "Play";
+        playButton.className = "play-button";
+        playButton.dataset.filename = item;
 
-          const buttonContainer = document.createElement("div");
-          buttonContainer.className = "list-item-buttons";
-          buttonContainer.appendChild(playButton);
+        const buttonContainer = document.createElement("div");
+        buttonContainer.className = "list-item-buttons";
+        buttonContainer.appendChild(playButton);
 
-          if (window.APP_CONFIG && window.APP_CONFIG.enableDelete) {
-            const deleteButton = document.createElement("button");
-            deleteButton.textContent = "Delete";
-            deleteButton.className = "delete-button";
-            deleteButton.dataset.filename = item;
-            buttonContainer.appendChild(deleteButton);
-          }
-
-          li.innerHTML = "";
-          li.appendChild(textSpan);
-          li.appendChild(buttonContainer);
+        if (window.APP_CONFIG && window.APP_CONFIG.enableDelete) {
+          const deleteButton = document.createElement("button");
+          deleteButton.textContent = "Delete";
+          deleteButton.className = "delete-button";
+          deleteButton.dataset.filename = item;
+          buttonContainer.appendChild(deleteButton);
         }
+
+        li.innerHTML = "";
+        li.appendChild(textSpan);
+        li.appendChild(buttonContainer);
       }
       listElement.appendChild(li);
     });
   };
 
-  // Function to fetch and update queue status
-  const updateStatus = async () => {
+  let lastLogId = 0;
+
+  const appendLogEntry = (entry) => {
+    if (!activityLog) return;
+    const line = entry && typeof entry.message === "string" ? entry.message : "";
+    if (activityLog.textContent) {
+      activityLog.textContent += `\n${line}`;
+    } else {
+      activityLog.textContent = line;
+    }
+    activityLog.scrollTop = activityLog.scrollHeight;
+  };
+
+  const fetchLogs = async () => {
     try {
-      const response = await fetch("/api/status");
+      const response = await fetch(`/api/logs?after=${lastLogId}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch status.");
+        throw new Error("Failed to fetch logs.");
       }
       const data = await response.json();
-
-      // Update each list
-      updateList(downloadingList, data.downloading, "item-downloading");
-      updateList(queuedList, data.queued, "item-queued");
-      updateList(completedList, data.completed, "item-completed");
-      updateList(failedList, data.failed, "item-failed");
-
-      // Also update the list of downloaded files
-      await updateDownloadedFiles();
+      if (Array.isArray(data.entries)) {
+        data.entries.forEach(appendLogEntry);
+      }
+      if (typeof data.latest_id === "number") {
+        lastLogId = data.latest_id;
+      }
     } catch (error) {
-      console.error("Error updating status:", error);
-      displayMessage("Error updating queue status.", "error");
+      console.error("Error fetching logs:", error);
     }
   };
 
@@ -181,8 +176,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       displayMessage(data.message || "URL successfully added to the queue!");
-      urlInput.value = ""; // Clear the input field
-      updateStatus(); // Update status immediately
+      urlInput.value = "";
+      fetchLogs();
+      updateDownloadedFiles();
     } catch (error) {
       console.error("Error submitting URL:", error);
       displayMessage(error.message, "error");
@@ -262,6 +258,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initial and periodic status updates
-  updateStatus(); // Initial status check
-  setInterval(updateStatus, 3000); // Poll every 3 seconds
+  fetchLogs();
+  updateDownloadedFiles();
+  setInterval(fetchLogs, 1000);
+  setInterval(updateDownloadedFiles, 3000);
 });

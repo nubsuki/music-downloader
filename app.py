@@ -1,11 +1,74 @@
 import concurrent.futures
+import concurrent.futures
+import logging
 import os
+import sys
 import threading
 from urllib.parse import urlparse
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from waitress import serve
 import downloader
 import state
+
+
+logging.getLogger("waitress.queue").setLevel(logging.ERROR)
+
+
+class StreamCapture:
+    def __init__(self, stream):
+        self.stream = stream
+        self.buffer = ""
+        self.lock = threading.Lock()
+
+    def write(self, message):
+        if message is None:
+            return
+        with self.lock:
+            self.stream.write(message)
+            self.stream.flush()
+            self.buffer += message
+            self._drain_buffer()
+
+    def _drain_buffer(self):
+        while True:
+            idx_n = self.buffer.find("\n")
+            idx_r = self.buffer.find("\r")
+            if idx_n == -1 and idx_r == -1:
+                break
+            if idx_n == -1:
+                idx = idx_r
+                sep = "\r"
+            elif idx_r == -1:
+                idx = idx_n
+                sep = "\n"
+            else:
+                if idx_n < idx_r:
+                    idx = idx_n
+                    sep = "\n"
+                else:
+                    idx = idx_r
+                    sep = "\r"
+            line = self.buffer[:idx]
+            self.buffer = self.buffer[idx + 1 :]
+            if line or sep == "\n":
+                state.add_log_line(line)
+
+    def flush(self):
+        with self.lock:
+            if self.buffer:
+                state.add_log_line(self.buffer)
+                self.buffer = ""
+            self.stream.flush()
+
+    def isatty(self):
+        return self.stream.isatty()
+
+    def fileno(self):
+        return self.stream.fileno()
+
+
+sys.stdout = StreamCapture(sys.stdout)
+sys.stderr = StreamCapture(sys.stderr)
 
 
 app = Flask(__name__)
@@ -87,6 +150,15 @@ def status():
                 status_report["failed"].append({"url": url, "error": status})
 
     return jsonify(status_report)
+
+
+@app.route("/api/logs")
+def logs():
+    after = request.args.get("after", default=0, type=int)
+    with state.log_lock:
+        entries = [entry for entry in state.log_entries if entry["id"] > after]
+        latest_id = state.log_entries[-1]["id"] if state.log_entries else after
+    return jsonify({"entries": entries, "latest_id": latest_id})
 
 
 DOWNLOADS_DIR = "downloads"

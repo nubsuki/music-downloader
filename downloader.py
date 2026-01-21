@@ -46,6 +46,36 @@ USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lowe
 
 RESTRICT_FILENAMES = str(os.environ.get("RESTRICT_FILENAMES", "false")).lower() in ("1", "true", "yes", "on")
 
+
+def _run_command_streamed(command, cwd=None):
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+    stdout = process.stdout
+    if stdout is None:
+        return process.wait()
+    buffer = ""
+    while True:
+        ch = stdout.read(1)
+        if ch == "":
+            break
+        if ch == "\n" or ch == "\r":
+            if buffer or ch == "\n":
+                print(buffer)
+            buffer = ""
+        else:
+            buffer += ch
+    if buffer:
+        print(buffer)
+    return process.wait()
+
 # Validate cookies path
 if COOKIES_FILE_PATH and not os.path.exists(COOKIES_FILE_PATH):
     print(f"[WARNING] Cookies file not found at: {COOKIES_FILE_PATH}. Continuing without authentication.")
@@ -376,21 +406,19 @@ def download_youtube_url(
 
     try:
         # Run yt-dlp with check=False to allow playlist processing even if some videos fail
-        res = subprocess.run(
-            command, check=False, capture_output=False, text=True, encoding='utf-8', errors='replace'
-        )
+        return_code = _run_command_streamed(command)
 
-        if res.returncode == 0:
+        if return_code == 0:
             print(f"\n[SUCCESS] Finished download for: {url}")
             with state.status_lock:
                 state.download_statuses[url] = "completed"
         else:
             if is_playlist:
-                print(f"\n[WARNING] Playlist download finished with exit code {res.returncode}. Proceeding to m3u generation.")
+                print(f"\n[WARNING] Playlist download finished with exit code {return_code}. Proceeding to m3u generation.")
                 with state.status_lock:
                     state.download_statuses[url] = "completed_with_errors"
             else:
-                err_msg = f"Download failed (yt-dlp exited with code {res.returncode}). Check console for details."
+                err_msg = f"Download failed (yt-dlp exited with code {return_code}). Check console for details."
                 print(f"\n[ERROR] {err_msg}")
                 with state.status_lock:
                     state.download_statuses[url] = f"failed: {err_msg}"
@@ -489,27 +517,19 @@ def download_spotify_url(url: str, output_path: str = "downloads", create_m3u: b
         command.extend(["--client-id", client_id, "--client-secret", client_secret])
 
     try:
-        res = subprocess.run(
-            command,
-            cwd=spotify_output_path,  # Run in the output directory
-            check=False,
-            capture_output=False,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        return_code = _run_command_streamed(command, cwd=spotify_output_path)
 
-        if res.returncode == 0:
+        if return_code == 0:
             print(f"\n[SUCCESS] Finished Spotify download for: {url}")
             with state.status_lock:
                 state.download_statuses[url] = "completed"
         else:
             if not is_single:
-                print(f"\n[WARNING] Spotify download finished with exit code {res.returncode}. Proceeding to m3u generation.")
+                print(f"\n[WARNING] Spotify download finished with exit code {return_code}. Proceeding to m3u generation.")
                 with state.status_lock:
                     state.download_statuses[url] = "completed_with_errors"
             else:
-                err_msg = f"Download failed (spotdl exited with code {res.returncode}). Check console for details."
+                err_msg = f"Download failed (spotdl exited with code {return_code}). Check console for details."
                 print(f"\n[ERROR] {err_msg}")
                 with state.status_lock:
                     state.download_statuses[url] = f"failed: {err_msg}"

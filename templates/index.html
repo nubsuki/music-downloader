@@ -32,27 +32,10 @@
       </form>
       <div id="message-container"></div>
 
-      <div class="status-grid">
-        <div id="downloading-section" class="status-section">
-          <h2>Downloading</h2>
-          <ul id="downloading-list"></ul>
-        </div>
-
-        <div id="queued-section" class="status-section">
-          <h2>In Queue</h2>
-          <ul id="queued-list"></ul>
-        </div>
-
-        <div id="completed-section" class="status-section">
-          <h2>Completed</h2>
-          <ul id="completed-list"></ul>
-        </div>
-
-        <div id="failed-section" class="status-section">
-          <h2>Failed</h2>
-          <ul id="failed-list"></ul>
-        </div>
-      </div>
+      <section id="activity-log-section" class="status-section" aria-labelledby="activity-log-heading">
+        <h2 id="activity-log-heading">Activity Log</h2>
+        <pre id="activity-log" class="log-terminal" role="log" aria-live="polite" aria-relevant="additions"></pre>
+      </section>
       <div id="downloaded-section" class="status-section">
         <h2>Downloaded Songs</h2>
         <input
