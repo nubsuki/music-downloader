@@ -372,8 +372,9 @@ def download_youtube_url(
             name_cmd.append(url)
             
             res = subprocess.run(name_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if res.returncode == 0:
-                playlist_name = res.stdout.strip().split('\n')[0]
+            stdout_lines = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+            if stdout_lines:
+                playlist_name = stdout_lines[0]
         except Exception as e:
             print(f"[WARNING] Could not determine playlist name for m3u: {e}")
 
