@@ -113,12 +113,22 @@ def create_playlist():
     if not url or not name:
         return jsonify({"success": False, "error": "URL and name are required."}), 400
     
-    # Sanitize and resolve collisions
-    playlist_dir = os.path.join(DOWNLOADS_DIR, "playlists")
-    os.makedirs(playlist_dir, exist_ok=True)
+    # Determine job type and directory
+    parsed = urlparse(url)
+    hostname = parsed.hostname.lower() if parsed.hostname else ""
+    is_spotify = (
+        parsed.scheme == "spotify" or
+        hostname == "spotify.com" or
+        hostname.endswith(".spotify.com")
+    )
+    job_type = "spotify" if is_spotify else "youtube"
     
-    safe_name = downloader.sanitize_playlist_name(name, playlist_dir)
-    playlist_path = os.path.join(playlist_dir, f"{safe_name}.m3u8")
+    # Save playlist in the same folder as the songs
+    target_dir = os.path.join(DOWNLOADS_DIR, job_type)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    safe_name = downloader.sanitize_playlist_name(name, target_dir)
+    playlist_path = os.path.join(target_dir, f"{safe_name}.m3u8")
     
     # Create empty M3U8 file
     try:
@@ -130,20 +140,13 @@ def create_playlist():
     # Fetch track info to queue individual downloads
     info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
     entries = info.get("entries", [])
-    
-    # Determine job type
-    parsed = urlparse(url)
-    hostname = parsed.hostname.lower() if parsed.hostname else ""
-    is_spotify = (
-        parsed.scheme == "spotify" or
-        hostname == "spotify.com" or
-        hostname.endswith(".spotify.com")
-    )
-    job_type = "spotify" if is_spotify else "youtube"
 
     if not entries:
         # Fallback for single video or if info fetch failed
+        print(f"[INFO] No entries found in info for {url}, treating as single item.")
         entries = [{"url": url}]
+    else:
+        print(f"[INFO] Found {len(entries)} entries for playlist {safe_name}")
 
     for entry in entries:
         entry_url = entry.get("url")

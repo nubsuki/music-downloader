@@ -203,8 +203,80 @@ def sanitize_playlist_name(name: str, output_path: str) -> str:
     return final_name
 
 
+def get_spotify_info(url: str) -> dict:
+    """Fetches title and track info for a Spotify URL using spotdl."""
+    try:
+        # Create a temporary file to save the query data
+        with tempfile.NamedTemporaryFile(suffix=".spotdl", delete=False) as tmp:
+            save_path = tmp.name
+        
+        # Run spotdl save
+        cmd = ["spotdl", "save", url, "--save-file", save_path]
+        
+        # Pass credentials if available
+        client_id = os.environ.get("SPOTIPY_CLIENT_ID")
+        client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
+        if client_id and client_secret:
+            cmd.extend(["--client-id", client_id, "--client-secret", client_secret])
+            
+        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        
+        # Read the saved file
+        with open(save_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        # Clean up
+        os.remove(save_path)
+        
+        # Parse data
+        title = "Spotify Playlist"
+        if isinstance(data, dict):
+            title = data.get("name") or data.get("list_name") or "Spotify Playlist"
+            
+        entries = []
+        songs = _spotdl_extract_songs(data)
+        
+        for song in songs:
+            if not isinstance(song, dict):
+                continue
+            
+            # Construct a URL or use the song URL
+            track_url = song.get("url")
+            if not track_url:
+                # Try to construct from ID
+                tid = _spotdl_song_track_id(song)
+                if tid:
+                    track_url = f"https://open.spotify.com/track/{tid}"
+            
+            song_title = song.get("title") or song.get("name")
+            artist, _ = _spotdl_song_artist_title(song)
+            if artist:
+                song_title = f"{artist} - {song_title}"
+                
+            if track_url:
+                entries.append({
+                    "url": track_url,
+                    "title": song_title or "Unknown Track"
+                })
+                
+        return {
+            "title": title,
+            "entries": entries
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get Spotify info: {e}")
+        return {"title": "Spotify Playlist", "entries": []}
+
+
 def get_url_info(url: str, cookies_file_path: str = None) -> dict:
     """Fetches title and entry info for a URL."""
+    # Check for Spotify URL
+    parsed = urlparse(url)
+    hostname = parsed.hostname.lower() if parsed.hostname else ""
+    if parsed.scheme == "spotify" or "spotify.com" in hostname:
+        return get_spotify_info(url)
+
     cmd = [
         "yt-dlp",
         "--ignore-errors",
@@ -263,7 +335,7 @@ def get_url_info(url: str, cookies_file_path: str = None) -> dict:
         return {"title": "Playlist", "entries": []}
 
 def append_to_m3u8(m3u8_path: str, entry_path: str):
-    """Appends a relative path to an M3U8 file safely."""
+    """Appends a filename to an M3U8 file safely."""
     with state.playlist_lock:
         try:
             # Ensure the file has #EXTM3U header if it's empty
@@ -271,16 +343,10 @@ def append_to_m3u8(m3u8_path: str, entry_path: str):
                 with open(m3u8_path, "w", encoding="utf-8") as f:
                     f.write("#EXTM3U\n")
             
-            # Normalize path for M3U8 (forward slashes)
-            # Use relative path if possible, otherwise absolute
-            base_dir = os.path.dirname(m3u8_path)
-            try:
-                rel_path = os.path.relpath(entry_path, base_dir).replace("\\", "/")
-            except ValueError:
-                rel_path = entry_path.replace("\\", "/")
+            filename = os.path.basename(entry_path)
                 
             with open(m3u8_path, "a", encoding="utf-8") as f:
-                f.write(f"{unicodedata.normalize('NFC', rel_path)}\n")
+                f.write(f"{unicodedata.normalize('NFC', filename)}\n")
         except Exception as e:
             print(f"[ERROR] Failed to append to M3U8: {e}")
 
@@ -514,18 +580,42 @@ def download_youtube_url(
             
             # Append to playlist if requested
             if playlist_path:
-                # Find the actual downloaded file. yt-dlp -o template might produce different names.
-                # We can use --get-filename to find what it SHOULD have been.
                 try:
-                    name_cmd = ["yt-dlp", "--get-filename", "-o", os.path.join(youtube_output_path, file_template), url]
-                    if cookies_file_path:
-                        name_cmd.extend(["--cookies", cookies_file_path])
-                    res = subprocess.run(name_cmd, capture_output=True, text=True, encoding="utf-8")
-                    expected_file = res.stdout.strip()
-                    # Change extension to mp3 as we requested audio conversion
-                    expected_mp3 = os.path.splitext(expected_file)[0] + ".mp3"
-                    if os.path.exists(expected_mp3):
-                        append_to_m3u8(playlist_path, expected_mp3)
+                    # Extract ID from URL
+                    video_id = None
+                    parsed_url = urlparse(url)
+                    if parsed_url.hostname in ("youtu.be", "www.youtu.be"):
+                        video_id = parsed_url.path.strip("/")
+                    else:
+                        qs = parse_qs(parsed_url.query)
+                        video_id = qs.get("v", [None])[0]
+
+                    found_file = None
+                    if video_id:
+                        # Search for file containing [video_id]
+                        search_str = f"[{video_id}].mp3"
+                        if os.path.exists(youtube_output_path):
+                            for f in os.listdir(youtube_output_path):
+                                if search_str in f:
+                                    found_file = os.path.join(youtube_output_path, f)
+                                    break
+                    
+                    if found_file:
+                        append_to_m3u8(playlist_path, found_file)
+                    else:
+                        # Fallback to the old method if ID search fails
+                        print(f"[INFO] ID search failed for {url}, falling back to yt-dlp filename prediction.")
+                        name_cmd = ["yt-dlp", "--get-filename", "-o", os.path.join(youtube_output_path, file_template), url]
+                        if cookies_file_path:
+                            name_cmd.extend(["--cookies", cookies_file_path])
+                        res = subprocess.run(name_cmd, capture_output=True, text=True, encoding="utf-8")
+                        expected_file = res.stdout.strip()
+                        expected_mp3 = os.path.splitext(expected_file)[0] + ".mp3"
+                        if os.path.exists(expected_mp3):
+                            append_to_m3u8(playlist_path, expected_mp3)
+                        else:
+                            print(f"[WARNING] Could not find file to append to playlist: {expected_mp3}")
+
                 except Exception as e:
                     print(f"[WARNING] Could not append to playlist: {e}")
         else:
