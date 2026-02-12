@@ -46,6 +46,20 @@
         <ul id="downloaded-list"></ul>
       </div>
     </div>
+
+    <!-- Playlist Modal -->
+    <div id="playlist-modal" class="modal">
+      <div class="modal-content">
+        <h3>Create Playlist</h3>
+        <p>Enter a name for your playlist:</p>
+        <input type="text" id="playlist-name-input" placeholder="Playlist Name" />
+        <div class="modal-buttons">
+          <button id="modal-cancel-btn" class="secondary-button">Cancel</button>
+          <button id="modal-ok-btn">OK</button>
+        </div>
+      </div>
+    </div>
+
     <div id="app-config" data-enable-delete="{{ 'true' if enable_delete else 'false' }}" style="display:none"></div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <footer id="player-footer">

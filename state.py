@@ -10,6 +10,8 @@ log_lock = threading.Lock()
 log_sequence = 0
 MAX_LOG_ENTRIES = 5000
 
+playlist_lock = threading.Lock()
+
 
 def add_log_line(message):
     global log_sequence

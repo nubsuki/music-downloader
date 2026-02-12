@@ -92,6 +92,79 @@ def index():
     return render_template("index.html", enable_delete=ENABLE_DELETE)
 
 
+@app.route("/api/get-info")
+def get_info():
+    """Fetches suggested title and track info for a URL."""
+    url = request.args.get("url")
+    if not url:
+        return jsonify({"success": False, "error": "URL is required."}), 400
+    
+    info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
+    return jsonify(info)
+
+
+@app.route("/api/create-playlist", methods=["POST"])
+def create_playlist():
+    """Creates an empty M3U8 file and queues tracks for download."""
+    data = request.get_json()
+    url = data.get("url")
+    name = data.get("name")
+    
+    if not url or not name:
+        return jsonify({"success": False, "error": "URL and name are required."}), 400
+    
+    # Sanitize and resolve collisions
+    playlist_dir = os.path.join(DOWNLOADS_DIR, "playlists")
+    os.makedirs(playlist_dir, exist_ok=True)
+    
+    safe_name = downloader.sanitize_playlist_name(name, playlist_dir)
+    playlist_path = os.path.join(playlist_dir, f"{safe_name}.m3u8")
+    
+    # Create empty M3U8 file
+    try:
+        with open(playlist_path, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Failed to create playlist file: {e}"}), 500
+
+    # Fetch track info to queue individual downloads
+    info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
+    entries = info.get("entries", [])
+    
+    # Determine job type
+    parsed = urlparse(url)
+    hostname = parsed.hostname.lower() if parsed.hostname else ""
+    is_spotify = (
+        parsed.scheme == "spotify" or
+        hostname == "spotify.com" or
+        hostname.endswith(".spotify.com")
+    )
+    job_type = "spotify" if is_spotify else "youtube"
+
+    if not entries:
+        # Fallback for single video or if info fetch failed
+        entries = [{"url": url}]
+
+    for entry in entries:
+        entry_url = entry.get("url")
+        with state.status_lock:
+            state.download_statuses[entry_url] = "queued"
+        
+        downloader.download_queue.put({
+            "type": job_type,
+            "url": entry_url,
+            "create_m3u": False, # manually managing the M3U8
+            "playlist_path": playlist_path
+        })
+
+    return jsonify({
+        "success": True,
+        "playlist_id": safe_name,
+        "path": playlist_path,
+        "track_count": len(entries)
+    })
+
+
 @app.route("/api/download", methods=["GET", "POST"])
 def unified_download():
     """
@@ -245,6 +318,15 @@ if __name__ == "__main__":
 
     print("-" * 50)
     print(f"Starting server")
+    
+    # Check for Deno
+    try:
+        import subprocess
+        deno_version = subprocess.check_output(["deno", "--version"], text=True).splitlines()[0]
+        print(f"[INFO] Deno is active ({deno_version})")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("[INFO] Deno is not found in PATH.")
+
     print(f"Open http://127.0.0.1:5000 in your browser.")
     print("-" * 50)
 

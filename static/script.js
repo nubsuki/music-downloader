@@ -10,6 +10,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const cfgEl = document.getElementById("app-config");
   window.APP_CONFIG = { enableDelete: !!(cfgEl && cfgEl.dataset.enableDelete === "true") };
 
+  // Modal elements
+  const modal = document.getElementById("playlist-modal");
+  const modalInput = document.getElementById("playlist-name-input");
+  const modalOkBtn = document.getElementById("modal-ok-btn");
+  const modalCancelBtn = document.getElementById("modal-cancel-btn");
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  let pendingUrl = "";
+
   /**
    * Helper function to create a list item for a URL.
    * @param {string} url - The URL to display.
@@ -153,35 +162,87 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const url = urlInput.value.trim();
-    const createM3u = document.getElementById("create-m3u-checkbox")?.checked || false;
 
     if (!url) {
       displayMessage("Please enter a URL.", "error");
       return;
     }
 
+    // Set loading state
+    submitBtn.disabled = true;
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = "Fetching info...";
+
     try {
-      const response = await fetch("/api/download", {
+      const infoResponse = await fetch(`/api/get-info?url=${encodeURIComponent(url)}`);
+      if (!infoResponse.ok) throw new Error("Failed to fetch URL info");
+      
+      const info = await infoResponse.json();
+      pendingUrl = url;
+      modalInput.value = info.title || "Playlist";
+      modal.classList.add("show");
+      modalInput.focus();
+      modalInput.select();
+    } catch (error) {
+      console.error("Error fetching info:", error);
+      displayMessage("Error fetching URL info. Please try again.", "error");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+    }
+  });
+
+  // Modal handlers
+  modalCancelBtn.addEventListener("click", () => {
+    modal.classList.remove("show");
+    pendingUrl = "";
+  });
+
+  modalOkBtn.addEventListener("click", async () => {
+    const playlistName = modalInput.value.trim();
+    if (!playlistName) {
+      alert("Please enter a playlist name.");
+      return;
+    }
+
+    modal.classList.remove("show");
+    submitBtn.disabled = true;
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.textContent = "Creating...";
+
+    try {
+      const response = await fetch("/api/create-playlist", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: url, create_m3u: createM3u }),
+        body: JSON.stringify({ url: pendingUrl, name: playlistName }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to add URL.");
+        throw new Error(data.error || "Failed to create playlist.");
       }
 
-      displayMessage(data.message || "URL successfully added to the queue!");
+      displayMessage(data.message || `Playlist '${data.playlist_id}' created! ${data.track_count} tracks queued.`);
       urlInput.value = "";
       fetchLogs();
       updateDownloadedFiles();
     } catch (error) {
-      console.error("Error submitting URL:", error);
+      console.error("Error creating playlist:", error);
       displayMessage(error.message, "error");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+      pendingUrl = "";
+    }
+  });
+
+  // Allow Enter key in modal input
+  modalInput.addEventListener("keyup", (event) => {
+    if (event.key === "Enter") {
+      modalOkBtn.click();
     }
   });
 
