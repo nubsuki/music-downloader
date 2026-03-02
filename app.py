@@ -109,6 +109,7 @@ def create_playlist():
     data = request.get_json()
     url = data.get("url")
     name = data.get("name")
+    overwrite = bool(data.get("overwrite", False))
     
     if not url or not name:
         return jsonify({"success": False, "error": "URL and name are required."}), 400
@@ -127,10 +128,21 @@ def create_playlist():
     target_dir = os.path.join(DOWNLOADS_DIR, job_type)
     os.makedirs(target_dir, exist_ok=True)
     
-    safe_name = downloader.sanitize_playlist_name(name, target_dir)
+    # Use sanitized base name without forcing uniqueness
+    safe_name = downloader.sanitize_playlist_name(name, target_dir, unique=False)
     playlist_path = os.path.join(target_dir, f"{safe_name}.m3u8")
+
+    if os.path.exists(playlist_path) and not overwrite:
+        suggested = downloader.sanitize_playlist_name(name, target_dir, unique=True)
+        return jsonify({
+            "success": False,
+            "error": "Playlist already exists.",
+            "exists": True,
+            "suggested_name": suggested,
+            "existing_path": playlist_path
+        }), 409
     
-    # Create empty M3U8 file
+    # Create or overwrite M3U8 file
     try:
         with open(playlist_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")

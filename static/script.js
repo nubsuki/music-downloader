@@ -211,18 +211,34 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Creating...";
 
     try {
-      const response = await fetch("/api/create-playlist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url: pendingUrl, name: playlistName }),
-      });
+      const makeRequest = async (payload) => {
+        const resp = await fetch("/api/create-playlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        return { resp, data };
+      };
 
-      const data = await response.json();
+      let payload = { url: pendingUrl, name: playlistName, overwrite: false };
+      let { resp, data } = await makeRequest(payload);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create playlist.");
+      if (resp.status === 409 && data && data.exists) {
+        const suggested = data.suggested_name || `${playlistName} (1)`;
+        const confirmOverwrite = confirm(`Playlist "${playlistName}" already exists.\n\nPress OK to overwrite the existing file, or Cancel to create a new one named "${suggested}".`);
+        if (confirmOverwrite) {
+          payload.overwrite = true;
+          ({ resp, data } = await makeRequest(payload));
+        } else {
+          payload.name = suggested;
+          payload.overwrite = false;
+          ({ resp, data } = await makeRequest(payload));
+        }
+      }
+
+      if (!resp.ok) {
+        throw new Error(data && data.error ? data.error : "Failed to create playlist.");
       }
 
       displayMessage(data.message || `Playlist '${data.playlist_id}' created! ${data.track_count} tracks queued.`);

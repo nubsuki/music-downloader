@@ -190,11 +190,14 @@ def _sanitize_filename_component(name: str) -> str:
     return s
 
 
-def sanitize_playlist_name(name: str, output_path: str) -> str:
+def sanitize_playlist_name(name: str, output_path: str, unique: bool = True) -> str:
     base_name = _sanitize_filename_component(name)
     if not base_name:
         base_name = "Playlist"
     
+    if not unique:
+        return base_name
+
     final_name = base_name
     counter = 1
     while os.path.exists(os.path.join(output_path, f"{final_name}.m3u8")):
