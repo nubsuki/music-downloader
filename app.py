@@ -128,12 +128,12 @@ def create_playlist():
     target_dir = os.path.join(DOWNLOADS_DIR, job_type)
     os.makedirs(target_dir, exist_ok=True)
     
-    # Use sanitized base name without forcing uniqueness
-    safe_name = downloader.sanitize_playlist_name(name, target_dir, unique=False)
-    safe_name = os.path.basename(safe_name)
-    if not safe_name or safe_name in (".", ".."):
-        safe_name = "Playlist"
-    playlist_path = os.path.join(target_dir, f"{safe_name}.m3u8")
+    # Use sanitized base name without forcing uniqueness and validate it
+    sanitized_name = downloader.sanitize_playlist_name(name, target_dir, unique=False)
+    sanitized_name = os.path.basename(sanitized_name)
+    if not sanitized_name or sanitized_name in (".", ".."):
+        sanitized_name = "Playlist"
+    playlist_path = os.path.join(target_dir, f"{sanitized_name}.m3u8")
     playlist_path = os.path.normpath(playlist_path)
     target_dir_norm = os.path.normpath(target_dir)
     if not playlist_path.startswith(target_dir_norm + os.sep):
@@ -166,7 +166,7 @@ def create_playlist():
         print(f"[INFO] No entries found in info for {url}, treating as single item.")
         entries = [{"url": url}]
     else:
-        print(f"[INFO] Found {len(entries)} entries for playlist {safe_name}")
+        print(f"[INFO] Found {len(entries)} entries for playlist {sanitized_name}")
 
     for entry in entries:
         entry_url = entry.get("url")
@@ -182,7 +182,7 @@ def create_playlist():
 
     return jsonify({
         "success": True,
-        "playlist_id": safe_name,
+        "playlist_id": sanitized_name,
         "path": playlist_path,
         "track_count": len(entries)
     })

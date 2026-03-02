@@ -206,6 +206,17 @@ def sanitize_playlist_name(name: str, output_path: str, unique: bool = True) -> 
     return final_name
 
 
+def _validate_youtube_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    host = parsed.hostname.lower() if parsed.hostname else ""
+    # Support youtu.be, youtube.com and subdomains
+    if host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com"):
+        return True
+    return False
+
+
 def _validate_spotify_url(url: str) -> bool:
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
@@ -292,6 +303,10 @@ def get_spotify_info(url: str) -> dict:
 
 def get_url_info(url: str, cookies_file_path: str = None) -> dict:
     """Fetches title and entry info for a URL."""
+    if not _validate_youtube_url(url) and not _validate_spotify_url(url):
+        print(f"[WARNING] Rejected invalid URL: {url}")
+        return {"title": "Playlist", "entries": []}
+        
     # Check for Spotify URL
     parsed = urlparse(url)
     hostname = parsed.hostname.lower() if parsed.hostname else ""
@@ -558,7 +573,7 @@ def download_youtube_url(
                 name_cmd.extend(["--cookies", cookies_file_path])
             name_cmd.append(url)
             
-            res = subprocess.run(name_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            res = subprocess.run(name_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', shell=False)
             stdout_lines = [line.strip() for line in res.stdout.splitlines() if line.strip()]
             if stdout_lines:
                 playlist_name = stdout_lines[0]
@@ -632,7 +647,7 @@ def download_youtube_url(
                         name_cmd = ["yt-dlp", "--get-filename", "-o", os.path.join(youtube_output_path, file_template), url]
                         if cookies_file_path:
                             name_cmd.extend(["--cookies", cookies_file_path])
-                        res = subprocess.run(name_cmd, capture_output=True, text=True, encoding="utf-8")
+                        res = subprocess.run(name_cmd, capture_output=True, text=True, encoding="utf-8", shell=False)
                         expected_file = res.stdout.strip()
                         expected_mp3 = os.path.splitext(expected_file)[0] + ".mp3"
                         if os.path.exists(expected_mp3):
