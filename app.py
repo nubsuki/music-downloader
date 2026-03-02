@@ -130,7 +130,14 @@ def create_playlist():
     
     # Use sanitized base name without forcing uniqueness
     safe_name = downloader.sanitize_playlist_name(name, target_dir, unique=False)
+    safe_name = os.path.basename(safe_name)
+    if not safe_name or safe_name in (".", ".."):
+        safe_name = "Playlist"
     playlist_path = os.path.join(target_dir, f"{safe_name}.m3u8")
+    playlist_path = os.path.normpath(playlist_path)
+    target_dir_norm = os.path.normpath(target_dir)
+    if not playlist_path.startswith(target_dir_norm + os.sep):
+        return jsonify({"success": False, "error": "Invalid playlist name."}), 400
 
     if os.path.exists(playlist_path) and not overwrite:
         suggested = downloader.sanitize_playlist_name(name, target_dir, unique=True)
@@ -147,7 +154,8 @@ def create_playlist():
         with open(playlist_path, "w", encoding="utf-8") as f:
             f.write("#EXTM3U\n")
     except Exception as e:
-        return jsonify({"success": False, "error": f"Failed to create playlist file: {e}"}), 500
+        logging.error("Failed to create playlist file '%s'", playlist_path, exc_info=True)
+        return jsonify({"success": False, "error": "Failed to create playlist file."}), 500
 
     # Fetch track info to queue individual downloads
     info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)

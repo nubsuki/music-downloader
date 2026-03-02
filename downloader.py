@@ -120,7 +120,7 @@ def _yt_dlp_get_expected_playlist_files(
         cmd.extend(["--cookies", cookies_file_path])
     cmd.append(url)
 
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=False)
     if res.returncode != 0 and not res.stdout.strip():
         return []
 
@@ -206,8 +206,23 @@ def sanitize_playlist_name(name: str, output_path: str, unique: bool = True) -> 
     return final_name
 
 
+def _validate_spotify_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return False
+    host = parsed.hostname.lower() if parsed.hostname else ""
+    if parsed.scheme in ("spotify",):
+        return True
+    if parsed.scheme in ("https", "http") and (host == "open.spotify.com" or host.endswith(".spotify.com") or host == "spotify.com"):
+        return True
+    return False
+
+
 def get_spotify_info(url: str) -> dict:
     """Fetches title and track info for a Spotify URL using spotdl."""
+    if not _validate_spotify_url(url):
+        print(f"[WARNING] Rejected non-Spotify URL: {url}")
+        return {"title": "Spotify Playlist", "entries": []}
     try:
         # Create a temporary file to save the query data
         with tempfile.NamedTemporaryFile(suffix=".spotdl", delete=False) as tmp:
@@ -217,12 +232,15 @@ def get_spotify_info(url: str) -> dict:
         cmd = ["spotdl", "save", url, "--save-file", save_path]
         
         # Pass credentials if available
+        env = os.environ.copy()
         client_id = os.environ.get("SPOTIPY_CLIENT_ID")
         client_secret = os.environ.get("SPOTIPY_CLIENT_SECRET")
-        if client_id and client_secret:
-            cmd.extend(["--client-id", client_id, "--client-secret", client_secret])
-            
-        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+        if client_id:
+            env["SPOTIPY_CLIENT_ID"] = client_id
+        if client_secret:
+            env["SPOTIPY_CLIENT_SECRET"] = client_secret
+        
+        subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", shell=False, env=env)
         
         # Read the saved file
         with open(save_path, "r", encoding="utf-8") as f:
@@ -293,7 +311,7 @@ def get_url_info(url: str, cookies_file_path: str = None) -> dict:
         cmd.extend(["--cookies", cookies_file_path])
     
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=False)
         if res.returncode != 0:
             return {"title": "Playlist", "entries": []}
         
@@ -362,9 +380,12 @@ def _spotdl_save_query(
     cwd: str,
 ) -> None:
     cmd = ["spotdl", "save", url, "--save-file", save_file_path]
-    if client_id and client_secret:
-        cmd.extend(["--client-id", client_id, "--client-secret", client_secret])
-    subprocess.run(cmd, cwd=cwd, check=True, capture_output=False, text=True, encoding="utf-8", errors="replace")
+    env = os.environ.copy()
+    if client_id:
+        env["SPOTIPY_CLIENT_ID"] = client_id
+    if client_secret:
+        env["SPOTIPY_CLIENT_SECRET"] = client_secret
+    subprocess.run(cmd, cwd=cwd, check=True, capture_output=False, text=True, encoding="utf-8", errors="replace", shell=False, env=env)
 
 
 def _load_spotdl_save_file(save_file_path: str):
