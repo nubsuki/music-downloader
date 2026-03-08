@@ -6,15 +6,15 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
 - **Web Interface**: Clean and simple web UI for adding and monitoring downloads.
 - **Unified Download**: Supports both **YouTube** and **Spotify** URLs via a single input.
-- **M3U Playlist Support**: 
+- **M3U8 Playlist Support**: 
   - Automatically generates `.m3u8` playlists for YouTube and Spotify albums/playlists.
   - Supports **Unicode** (Japanese, Korean, etc.) correctly in Navidrome and VLC.
-  - Option to create playlists even for existing songs.
+  - **Manual Creation**: Create custom playlists for existing songs via the UI modal.
 - **Filename Sanitization**: 
   - Automatically transliterates non-ASCII characters to fix compatibility issues with Docker/Windows mounts.
   - Configurable via `RESTRICT_FILENAMES`.
 - **Concurrent Downloads**: Multiple simultaneous downloads with configurable worker count.
-- **Real-time Status**: Live download progress and status updates.
+- **Real-time Status**: Live download progress, activity logs, and status updates via a terminal-like UI.
 - **Docker Support**: Containerized deployment with Docker and Docker Compose.
 - **Delete Functionality**: Enable or disable delete UI and API endpoints for downloaded files.
 - **Download Archive**: Use an archive file to skip already downloaded files based on file existence.
@@ -61,20 +61,39 @@ services:
 
 ## API
 
-**Endpoint:** `/api/download`
-**Methods:** `GET`, `POST`
+### Download
+**Endpoint:** `/api/download`  
+**Methods:** `GET`, `POST`  
+**Description:** Adds a URL to the download queue.
 
-### GET Example
-```bash
-curl "http://localhost:5000/api/download?url=https://www.youtube.com/watch?v=VIDEO_ID"
-```
+- **GET Example**: `curl "http://localhost:5000/api/download?url=URL"`
+- **POST Example (JSON)**:
+  ```bash
+  curl -X POST http://localhost:5000/api/download \
+       -H "Content-Type: application/json" \
+       -d '{"url": "URL", "create_m3u": true}'
+  ```
 
-### POST Example (JSON)
-```bash
-curl -X POST http://localhost:5000/api/download \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://open.spotify.com/playlist/ID", "create_m3u": true}'
-```
+### Status & Logs
+- **Get Status**: `GET /api/status` - Returns status of all queued/active downloads.
+- **Get Logs**: `GET /api/logs?after=ID` - Returns real-time terminal output logs.
+
+### File Management
+- **List Files**: `GET /api/downloaded_files` - Returns a list of all downloaded MP3s.
+- **Delete File**: `POST /api/delete_file` - Deletes a specific file (requires `ENABLE_DELETE=true`).
+  ```bash
+  curl -X POST http://localhost:5000/api/delete_file \
+       -H "Content-Type: application/json" \
+       -d '{"filename": "youtube/song.mp3"}'
+  ```
+
+### Playlists
+- **Create Playlist**: `POST /api/create-playlist` - Creates a custom M3U8 for a URL.
+  ```bash
+  curl -X POST http://localhost:5000/api/create-playlist \
+       -H "Content-Type: application/json" \
+       -d '{"url": "URL", "name": "My Playlist", "overwrite": false}'
+  ```
 
 ## Configuration
 
@@ -82,8 +101,10 @@ curl -X POST http://localhost:5000/api/download \
 |----------|---------|-------------|
 | `MAX_WORKERS` | `3` | Number of concurrent downloads. |
 | `RESTRICT_FILENAMES` | `false` | If `true`, forces filenames to ASCII (fixes Unicode issues on Docker/Windows). |
-| `ENABLE_DELETE` | `false` | Enables delete button in the UI. |
-| `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs to prevent duplicates. |
+| `ENABLE_DELETE` | `false` | Enables delete button in the UI and the delete API endpoint. |
+| `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
+| `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |
+| `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive and configs are stored. |
 | `SPOTIPY_CLIENT_ID` | - | Required for Spotify downloads. |
 | `SPOTIPY_CLIENT_SECRET` | - | Required for Spotify downloads. |
 
