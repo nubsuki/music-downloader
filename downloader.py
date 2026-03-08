@@ -183,8 +183,10 @@ def _sanitize_filename_component(name: str) -> str:
         s = re.sub(r"[^a-zA-Z0-9\.\-]", "_", s)
         s = re.sub(r"_+", "_", s)
     else:
-        # Alphanumeric, dash, underscore, space only as per requirement
-        s = re.sub(r"[^a-zA-Z0-9\-\_\s]", "_", s)
+        # Remove invalid filename characters
+        s = unicodedata.normalize('NFC', s)
+        s = "".join(ch for ch in s if unicodedata.category(ch)[0] != "C")
+        s = re.sub(r'[<>:"/\\|?*]', "", s)
         s = re.sub(r"\s+", " ", s).strip()
     
     return s
