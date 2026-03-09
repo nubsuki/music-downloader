@@ -45,6 +45,11 @@ CONFIG_DIR = os.environ.get("DOWNLOADER_CONFIG_DIR") or os.path.join(script_dir,
 USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lower() in ("1", "true", "yes", "on")
 
 RESTRICT_FILENAMES = str(os.environ.get("RESTRICT_FILENAMES", "false")).lower() in ("1", "true", "yes", "on")
+PLAYLIST_RESTRICT_FILENAMES_ENV = os.environ.get("PLAYLIST_RESTRICT_FILENAMES")
+if PLAYLIST_RESTRICT_FILENAMES_ENV is None:
+    PLAYLIST_RESTRICT_FILENAMES = False
+else:
+    PLAYLIST_RESTRICT_FILENAMES = str(PLAYLIST_RESTRICT_FILENAMES_ENV).lower() in ("1", "true", "yes", "on")
 
 
 def _run_command_streamed(command, cwd=None):
@@ -170,7 +175,7 @@ def create_youtube_playlist_m3u(
     print(f"[INFO] Created m3u playlist: {m3u_path}")
 
 
-def _sanitize_filename_component(name: str) -> str:
+def _sanitize_filename_component(name: str, restrict: bool = None) -> str:
     if name is None:
         return ""
     s = str(name)
@@ -178,7 +183,10 @@ def _sanitize_filename_component(name: str) -> str:
     # Truncate to 100 chars
     s = s[:100]
     
-    if RESTRICT_FILENAMES:
+    if restrict is None:
+        restrict = RESTRICT_FILENAMES
+    
+    if restrict:
         s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
         s = re.sub(r"[^a-zA-Z0-9\.\-]", "_", s)
         s = re.sub(r"_+", "_", s)
@@ -193,7 +201,7 @@ def _sanitize_filename_component(name: str) -> str:
 
 
 def sanitize_playlist_name(name: str, output_path: str, unique: bool = True) -> str:
-    base_name = _sanitize_filename_component(name)
+    base_name = _sanitize_filename_component(name, restrict=PLAYLIST_RESTRICT_FILENAMES)
     if not base_name:
         base_name = "Playlist"
     
@@ -467,7 +475,7 @@ def create_spotify_m3u_from_save(save_file_path: str, spotify_output_path: str) 
         if not isinstance(s, dict):
             continue
         list_name = s.get("list_name") or s.get("list-name") or s.get("listName") or default_list_name
-        list_name = _sanitize_filename_component(list_name) or "Spotify Playlist"
+        list_name = _sanitize_filename_component(list_name, restrict=PLAYLIST_RESTRICT_FILENAMES) or "Spotify Playlist"
 
         track_id = _spotdl_song_track_id(s)
         if not track_id:

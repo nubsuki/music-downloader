@@ -42,6 +42,7 @@ services:
       - USE_DOWNLOAD_ARCHIVE=false # "false": checks file existence | "true": uses archive.txt
       - MAX_WORKERS=3
       - RESTRICT_FILENAMES=true # Fixes VLC/Navidrome Unicode issues by forcing ASCII filenames
+      - PLAYLIST_RESTRICT_FILENAMES=false # Optional: Enforce ASCII filenames for playlists
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # Optional: for age-restricted content
       - DOWNLOADER_CONFIG_DIR=/app/config
       - SPOTIPY_CLIENT_ID=your_spotify_client_id
