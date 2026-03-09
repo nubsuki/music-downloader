@@ -41,8 +41,8 @@ services:
       - ENABLE_DELETE=false # Toggle delete UI and API
       - USE_DOWNLOAD_ARCHIVE=false # "false": checks file existence | "true": uses archive.txt
       - MAX_WORKERS=3
-      - RESTRICT_FILENAMES=true # Fixes VLC/Navidrome Unicode issues by forcing ASCII filenames
-      - PLAYLIST_RESTRICT_FILENAMES=false # Optional: Enforce ASCII filenames for playlists
+      - RESTRICT_FILENAMES=true # Fixes VLC/Navidrome Unicode issues by forcing ASCII filenames for song files
+      - PLAYLIST_RESTRICT_FILENAMES=false # Optional: if true, also restricts playlist .m3u8 filenames to ASCII (default keeps Unicode)
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # Optional: for age-restricted content
       - DOWNLOADER_CONFIG_DIR=/app/config
       - SPOTIPY_CLIENT_ID=your_spotify_client_id
@@ -101,11 +101,12 @@ services:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MAX_WORKERS` | `3` | Number of concurrent downloads. |
-| `RESTRICT_FILENAMES` | `false` | If `true`, forces filenames to ASCII (fixes Unicode issues on Docker/Windows). |
+| `RESTRICT_FILENAMES` | `false` | If `true`, forces song filenames to ASCII (fixes Unicode issues on Docker/Windows). |
 | `ENABLE_DELETE` | `false` | Enables delete button in the UI and the delete API endpoint. |
 | `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
 | `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |
 | `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive and configs are stored. |
+| `PLAYLIST_RESTRICT_FILENAMES` | `false` | If `true`, also restricts playlist `.m3u8` filenames to ASCII. Default `false` keeps Unicode playlist names. |
 | `SPOTIPY_CLIENT_ID` | - | Required for Spotify downloads. |
 | `SPOTIPY_CLIENT_SECRET` | - | Required for Spotify downloads. |
 
