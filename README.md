@@ -1,4 +1,4 @@
-# Music Downloader
+# Music Downloader ![GHCR Pulls](https://ghcr-badge.elias.eu.org/shield/nubsuki/music-downloader/music-downloader)
 
 A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
