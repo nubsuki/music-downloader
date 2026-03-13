@@ -318,9 +318,7 @@ def get_url_info(url: str, cookies_file_path: str = None) -> dict:
         return {"title": "Playlist", "entries": []}
         
     # Check for Spotify URL
-    parsed = urlparse(url)
-    hostname = parsed.hostname.lower() if parsed.hostname else ""
-    if parsed.scheme == "spotify" or "spotify.com" in hostname:
+    if _validate_spotify_url(url):
         return get_spotify_info(url)
 
     cmd = [
