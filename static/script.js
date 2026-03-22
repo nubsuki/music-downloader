@@ -16,6 +16,37 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalOkBtn = document.getElementById("modal-ok-btn");
   const modalCancelBtn = document.getElementById("modal-cancel-btn");
   const submitBtn = form.querySelector('button[type="submit"]');
+  const createM3uCheckbox = document.getElementById("create-m3u-checkbox");
+  const tabButtons = document.querySelectorAll(".tab-button");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+
+  const setActiveTab = (targetId) => {
+    tabButtons.forEach((button) => {
+      const isActive = button.dataset.tabTarget === targetId;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.setAttribute("tabindex", isActive ? "0" : "-1");
+    });
+
+    tabPanels.forEach((panel) => {
+      const isActive = panel.id === targetId;
+      panel.classList.toggle("active", isActive);
+      panel.hidden = !isActive;
+    });
+  };
+
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveTab(button.dataset.tabTarget);
+    });
+  });
+
+  if (tabButtons.length > 0) {
+    const activeButton = document.querySelector(".tab-button.active");
+    setActiveTab(
+      activeButton ? activeButton.dataset.tabTarget : tabButtons[0].dataset.tabTarget
+    );
+  }
 
   let pendingUrl = "";
 
@@ -168,15 +199,32 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Set loading state
     submitBtn.disabled = true;
     const originalBtnText = submitBtn.textContent;
     submitBtn.textContent = "Fetching info...";
 
     try {
+      const createM3u = !!(createM3uCheckbox && createM3uCheckbox.checked);
+
+      if (!createM3u) {
+        const response = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, create_m3u: false }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data && data.error ? data.error : "Failed to queue download.");
+        }
+        displayMessage(data.message || "URL added to queue.");
+        urlInput.value = "";
+        fetchLogs();
+        return;
+      }
+
       const infoResponse = await fetch(`/api/get-info?url=${encodeURIComponent(url)}`);
       if (!infoResponse.ok) throw new Error("Failed to fetch URL info");
-      
+
       const info = await infoResponse.json();
       pendingUrl = url;
       modalInput.value = info.title || "Playlist";
@@ -184,8 +232,8 @@ document.addEventListener("DOMContentLoaded", () => {
       modalInput.focus();
       modalInput.select();
     } catch (error) {
-      console.error("Error fetching info:", error);
-      displayMessage("Error fetching URL info. Please try again.", "error");
+      console.error("Error submitting URL:", error);
+      displayMessage(error.message || "Request failed. Please try again.", "error");
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = originalBtnText;

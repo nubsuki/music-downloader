@@ -26,24 +26,52 @@
         />
         <label class="checkbox-wrapper" title="Create .m3u playlist file">
           <input type="checkbox" id="create-m3u-checkbox">
-          <span>.m3u</span>
+          <span>.m3u8</span>
         </label>
         <button type="submit">Add to Queue</button>
       </form>
       <div id="message-container"></div>
 
-      <section id="activity-log-section" class="status-section" aria-labelledby="activity-log-heading">
-        <h2 id="activity-log-heading">Activity Log</h2>
-        <pre id="activity-log" class="log-terminal" role="log" aria-live="polite" aria-relevant="additions"></pre>
-      </section>
-      <div id="downloaded-section" class="status-section">
-        <h2>Downloaded Songs</h2>
-        <input
-          type="text"
-          id="downloaded-search-input"
-          placeholder="Search downloaded songs..."
-        />
-        <ul id="downloaded-list"></ul>
+      <div class="tabs-shell">
+        <div class="tabs-nav" role="tablist" aria-label="Content sections">
+          <button
+            type="button"
+            class="tab-button active"
+            role="tab"
+            id="tab-activity"
+            aria-controls="activity-log-section"
+            aria-selected="true"
+            data-tab-target="activity-log-section"
+          >
+            Activity Log
+          </button>
+          <button
+            type="button"
+            class="tab-button"
+            role="tab"
+            id="tab-downloaded"
+            aria-controls="downloaded-section"
+            aria-selected="false"
+            tabindex="-1"
+            data-tab-target="downloaded-section"
+          >
+            Downloaded Songs
+          </button>
+        </div>
+
+        <section id="activity-log-section" class="status-section tab-panel active" aria-labelledby="tab-activity">
+          <h2 id="activity-log-heading">Activity Log</h2>
+          <pre id="activity-log" class="log-terminal" role="log" aria-live="polite" aria-relevant="additions"></pre>
+        </section>
+        <section id="downloaded-section" class="status-section tab-panel" aria-labelledby="tab-downloaded" hidden>
+          <h2>Downloaded Songs</h2>
+          <input
+            type="text"
+            id="downloaded-search-input"
+            placeholder="Search downloaded songs..."
+          />
+          <ul id="downloaded-list"></ul>
+        </section>
       </div>
     </div>
 

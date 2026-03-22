@@ -1,43 +1,58 @@
 :root {
-  --background-color: #121212;
-  --text-color: #e0e0e0;
-  --container-bg-color: #1e1e1e;
-  --container-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --header-color: #ffffff;
-  --input-border-color: #555;
-  --input-focus-border-color: #007bff;
-  --input-focus-shadow: 0 0 0 2px rgba(0, 123, 255, 0.4);
-  --button-bg-color: #007bff;
-  --button-text-color: white;
-  --button-hover-bg-color: #0056b3;
-  --section-bg-color: #2a2a2a;
-  --section-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  --section-header-color: #e0e0e0;
-  --section-border-color: #444;
-  --item-bg-color: #333;
-  --item-border-color: #555;
-  --log-error-color: #ff8c8c;
+  --background-color: #050807;
+  --text-color: #bafef2;
+  --container-bg-color: rgba(7, 14, 13, 0.82);
+  --container-shadow: 0 20px 55px rgba(0, 0, 0, 0.72);
+  --header-color: #d9fff8;
+  --input-border-color: #1f4d46;
+  --input-focus-border-color: #7dfff0;
+  --input-focus-shadow: 0 0 0 3px rgba(125, 255, 240, 0.22);
+  --button-bg-color: #63e6d6;
+  --button-text-color: #041110;
+  --button-hover-bg-color: #81fff1;
+  --section-bg-color: rgba(8, 18, 16, 0.88);
+  --section-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+  --section-header-color: #cafff8;
+  --section-border-color: #1b4b44;
+  --item-bg-color: #0d1f1d;
+  --item-border-color: #235b53;
+  --log-error-color: #ff9f9f;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
-  background-color: var(--background-color);
+  background: radial-gradient(circle at 50% 10%, #10201d 0%, #050807 50%, #020403 100%);
   color: var(--text-color);
   margin: 0;
-  padding: 2rem;
-  padding-bottom: 120px;
+  padding: 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   transition: background-color 0.3s, color 0.3s;
 }
 
 .container {
   background-color: var(--container-bg-color);
-  padding: 2rem;
-  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(125, 255, 240, 0.22);
   box-shadow: var(--container-shadow);
   width: 100%;
   max-width: 1200px;
-  margin: auto;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 h1 {
@@ -78,8 +93,9 @@ h1 {
 
 #url-form {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
 }
 
 #url-input {
@@ -133,14 +149,61 @@ button:hover {
   min-height: 1.5em;
 }
 
-#activity-log-section {
-  margin-bottom: 2rem;
+.tabs-shell {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tabs-nav {
+  display: inline-flex;
+  gap: 0.5rem;
+  background-color: rgba(11, 27, 24, 0.95);
+  border: 1px solid var(--section-border-color);
+  border-radius: 999px;
+  padding: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  background-color: transparent;
+  color: #9bece0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  padding: 0.55rem 1rem;
+}
+
+.tab-button:hover {
+  background-color: rgba(125, 255, 240, 0.2);
+}
+
+.tab-button.active {
+  background-color: #63e6d6;
+  border-color: #8bfff3;
+  color: #041110;
+}
+
+.tab-panel {
+  display: none;
+  min-height: 0;
+}
+
+.tab-panel.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .log-terminal {
   margin: 0;
   padding: 0.75rem;
-  max-height: 420px;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background-color: var(--item-bg-color);
   border: 1px solid var(--item-border-color);
@@ -152,15 +215,13 @@ button:hover {
   white-space: pre-wrap;
 }
 
-#downloaded-section {
-  margin-top: 2rem;
-}
-
 .status-section {
   background-color: var(--section-bg-color);
-  border-radius: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--section-border-color);
   padding: 1.5rem;
   box-shadow: var(--section-shadow);
+  min-height: 0;
 }
 
 .status-section h2 {
@@ -239,18 +300,17 @@ button:hover {
 }
 
 #player-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
   background-color: var(--container-bg-color);
-  padding: 1rem;
+  border: 1px solid var(--section-border-color);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 1rem;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 #now-playing {
@@ -342,4 +402,30 @@ button:hover {
 
 #modal-ok-btn {
   background-color: var(--button-bg-color);
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 0.75rem;
+  }
+
+  .container {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+
+  #url-form {
+    flex-direction: column;
+  }
+
+  #player-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  #now-playing {
+    text-align: left;
+    flex-basis: auto;
+  }
 }

@@ -2,6 +2,8 @@
 
 A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
+![MusicDownloader](assets/image.png)
+
 ## Features
 
 - **Web Interface**: Clean and simple web UI for adding and monitoring downloads.
