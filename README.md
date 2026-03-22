@@ -25,12 +25,9 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
 ### Using Docker
 
-1. Build and run with Docker Compose:
-```bash
-docker-compose up -d --build
-```
+Run with Docker Compose:
 
-### Docker Compose Example
+#### Docker Compose Example
 
 ```yaml
 services:
@@ -59,7 +56,7 @@ services:
 
 1. Open your browser and navigate to `http://localhost:5000`
 2. Paste a **YouTube** or **Spotify** URL in the input field.
-3. (Optional) Check the **.m3u** box to generate a playlist file.
+3. Check the **.m3u8** box to generate a playlist file.
 4. Click "Add to Queue" to start downloading.
 
 ## API
