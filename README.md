@@ -42,6 +42,7 @@ services:
       - MAX_WORKERS=3
       - RESTRICT_FILENAMES=true # Fixes VLC/Navidrome Unicode issues by forcing ASCII filenames for song files
       - PLAYLIST_RESTRICT_FILENAMES=false # Optional: if true, also restricts playlist .m3u8 filenames to ASCII (default keeps Unicode)
+      - AUTO_PLAYLIST=false # Optional: if true, hides .m3u8 checkbox and auto-prompts playlist creation for playlist/album URLs
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # Optional: for age-restricted content
       - DOWNLOADER_CONFIG_DIR=/app/config
       - SPOTIPY_CLIENT_ID=your_spotify_client_id
@@ -56,8 +57,9 @@ services:
 
 1. Open your browser and navigate to `http://localhost:5000`
 2. Paste a **YouTube** or **Spotify** URL in the input field.
-3. Check the **.m3u8** box to generate a playlist file.
-4. Click "Add to Queue" to start downloading.
+3. Optional: Check the **.m3u8** box to generate a playlist file.
+4. Optional: Set `AUTO_PLAYLIST=true` to hide the checkbox and auto-prompt playlist creation for playlist/album URLs.
+5. Click "Add to Queue" to start downloading.
 
 ## API
 
@@ -101,6 +103,7 @@ services:
 |----------|---------|-------------|
 | `MAX_WORKERS` | `3` | Number of concurrent downloads. |
 | `RESTRICT_FILENAMES` | `false` | If `true`, forces song filenames to ASCII (fixes Unicode issues on Docker/Windows). |
+| `AUTO_PLAYLIST` | `false` | If `true`, hides the `.m3u8` checkbox and automatically opens playlist creation for playlist/album URLs. |
 | `ENABLE_DELETE` | `false` | Enables delete button in the UI and the delete API endpoint. |
 | `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
 | `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |

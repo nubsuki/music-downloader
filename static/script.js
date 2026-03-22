@@ -8,7 +8,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const audioPlayer = document.getElementById("audio-player");
   const nowPlaying = document.getElementById("now-playing");
   const cfgEl = document.getElementById("app-config");
-  window.APP_CONFIG = { enableDelete: !!(cfgEl && cfgEl.dataset.enableDelete === "true") };
+  window.APP_CONFIG = {
+    enableDelete: !!(cfgEl && cfgEl.dataset.enableDelete === "true"),
+    autoPlaylist: !!(cfgEl && cfgEl.dataset.autoPlaylist === "true"),
+  };
 
   // Modal elements
   const modal = document.getElementById("playlist-modal");
@@ -49,6 +52,29 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let pendingUrl = "";
+
+  const isPlaylistUrl = (rawUrl) => {
+    try {
+      const parsed = new URL(rawUrl);
+      const host = (parsed.hostname || "").toLowerCase();
+
+      const isSpotify = host === "spotify.com" || host.endsWith(".spotify.com") || parsed.protocol === "spotify:";
+      if (isSpotify) {
+        const p = parsed.pathname || "";
+        return p.includes("/playlist/") || p.includes("/album/") || rawUrl.includes(":playlist:") || rawUrl.includes(":album:");
+      }
+
+      const isYouTube = host.includes("youtube.com") || host === "youtu.be";
+      if (isYouTube) {
+        if ((parsed.pathname || "").startsWith("/playlist")) return true;
+        return parsed.searchParams.has("list");
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  };
 
   /**
    * Helper function to create a list item for a URL.
@@ -204,9 +230,11 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Fetching info...";
 
     try {
-      const createM3u = !!(createM3uCheckbox && createM3uCheckbox.checked);
+      const manualCreateM3u = !!(createM3uCheckbox && createM3uCheckbox.checked);
+      const autoPlaylistEnabled = !!(window.APP_CONFIG && window.APP_CONFIG.autoPlaylist);
+      const shouldCreatePlaylist = manualCreateM3u || (autoPlaylistEnabled && isPlaylistUrl(url));
 
-      if (!createM3u) {
+      if (!shouldCreatePlaylist) {
         const response = await fetch("/api/download", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

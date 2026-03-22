@@ -24,10 +24,12 @@
           placeholder="Enter YouTube or Spotify URL"
           required
         />
+        {% if not auto_playlist %}
         <label class="checkbox-wrapper" title="Create .m3u playlist file">
           <input type="checkbox" id="create-m3u-checkbox">
           <span>.m3u8</span>
         </label>
+        {% endif %}
         <button type="submit">Add to Queue</button>
       </form>
       <div id="message-container"></div>
@@ -88,7 +90,7 @@
       </div>
     </div>
 
-    <div id="app-config" data-enable-delete="{{ 'true' if enable_delete else 'false' }}" style="display:none"></div>
+    <div id="app-config" data-enable-delete="{{ 'true' if enable_delete else 'false' }}" data-auto-playlist="{{ 'true' if auto_playlist else 'false' }}" style="display:none"></div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <footer id="player-footer">
       <div id="now-playing">No song selected</div>

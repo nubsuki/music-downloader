@@ -89,7 +89,7 @@ worker_thread.start()
 @app.route("/")
 def index():
     """Serves the main HTML page."""
-    return render_template("index.html", enable_delete=ENABLE_DELETE)
+    return render_template("index.html", enable_delete=ENABLE_DELETE, auto_playlist=AUTO_PLAYLIST)
 
 
 @app.route("/api/get-info")
@@ -259,6 +259,7 @@ def logs():
 
 DOWNLOADS_DIR = "downloads"
 ENABLE_DELETE = os.environ.get("ENABLE_DELETE", "false").lower() == "true"
+AUTO_PLAYLIST = os.environ.get("AUTO_PLAYLIST", "false").lower() == "true"
 
 @app.route("/api/downloaded_files")
 def downloaded_files():
