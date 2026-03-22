@@ -267,6 +267,78 @@ button:hover {
   box-sizing: border-box;
 }
 
+.inline-form {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.inline-form input {
+  flex: 1;
+  padding: 0.6rem;
+  border: 1px solid var(--input-border-color);
+  background-color: var(--item-bg-color);
+  color: var(--text-color);
+  border-radius: 4px;
+}
+
+.inline-form input:focus {
+  outline: none;
+  border-color: var(--input-focus-border-color);
+  box-shadow: var(--input-focus-shadow);
+}
+
+.playlist-track-item {
+  align-items: center;
+}
+
+.playlist-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.75rem;
+}
+
+.playlist-track-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.playlist-track-title {
+  font-weight: 600;
+}
+
+.playlist-track-meta {
+  font-size: 0.82rem;
+  color: #8fd8ce;
+}
+
+.playlist-update-button {
+  background-color: #f7c948;
+  color: #141006;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.7rem;
+}
+
+.playlist-update-button:hover {
+  background-color: #ffd670;
+}
+
+.playlist-delete-button {
+  background-color: #402126;
+  color: #ffb3b3;
+  border: 1px solid #8a3e4a;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.38rem 0.55rem;
+}
+
+.playlist-delete-button:hover {
+  background-color: #5d2a33;
+}
+
 .delete-button {
   padding: 0.25rem 0.5rem;
   border: none;
@@ -415,6 +487,10 @@ button:hover {
   }
 
   #url-form {
+    flex-direction: column;
+  }
+
+  .inline-form {
     flex-direction: column;
   }
 

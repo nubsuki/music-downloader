@@ -5,6 +5,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const activityLog = document.getElementById("activity-log");
   const downloadedList = document.getElementById("downloaded-list");
+  const playlistTrackedList = document.getElementById("playlist-tracked-list");
+  const playlistTrackForm = document.getElementById("playlist-track-form");
+  const playlistTrackInput = document.getElementById("playlist-track-input");
+  const playlistRefreshBtn = document.getElementById("playlist-refresh-btn");
   const audioPlayer = document.getElementById("audio-player");
   const nowPlaying = document.getElementById("now-playing");
   const cfgEl = document.getElementById("app-config");
@@ -52,6 +56,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let pendingUrl = "";
+  let pendingTrackUrl = "";
+  let modalAction = "";
 
   const isPlaylistUrl = (rawUrl) => {
     try {
@@ -193,8 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Function to update MP3 counter display
   const updateMp3Counter = (count) => {
     let counterElement = document.getElementById("mp3-counter");
-    
-    // Create counter element if it doesn't exist
     if (!counterElement) {
       const downloadedSection = document.getElementById("downloaded-section");
       counterElement = document.createElement("div");
@@ -202,8 +206,98 @@ document.addEventListener("DOMContentLoaded", () => {
       counterElement.className = "mp3-counter";
       downloadedSection.insertBefore(counterElement, downloadedSection.firstChild.nextSibling);
     }
-    
-    counterElement.textContent = `${count} MP3 file${count !== 1 ? 's' : ''} downloaded`;
+    counterElement.textContent = `${count} MP3 file${count !== 1 ? "s" : ""} downloaded`;
+  };
+
+  const renderTrackedPlaylists = (items) => {
+    if (!playlistTrackedList) return;
+    playlistTrackedList.innerHTML = "";
+    if (!Array.isArray(items) || items.length === 0) {
+      playlistTrackedList.innerHTML = "<li>None</li>";
+      return;
+    }
+
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "playlist-track-item";
+
+      const details = document.createElement("div");
+      details.className = "playlist-track-details";
+
+      const title = document.createElement("div");
+      title.className = "playlist-track-title";
+      title.textContent = item.name || "Playlist";
+
+      const meta = document.createElement("div");
+      meta.className = "playlist-track-meta";
+      const tracked = Number(item.tracked_track_count || 0);
+      const remote = Number(item.remote_track_count || tracked);
+      const added = Number(item.new_tracks || 0);
+      const removed = Number(item.removed_tracks || 0);
+      let diffText = "No changes detected";
+      if (added > 0 || removed > 0) {
+        const parts = [];
+        if (added > 0) parts.push(`+${added}`);
+        if (removed > 0) parts.push(`-${removed}`);
+        diffText = `Changes: ${parts.join("/")}`;
+      }
+      meta.textContent = `${tracked} tracked song${tracked !== 1 ? "s" : ""} • ${remote} currently in playlist • ${diffText}`;
+
+      details.appendChild(title);
+      details.appendChild(meta);
+      li.appendChild(details);
+
+      const actions = document.createElement("div");
+      actions.className = "playlist-item-actions";
+
+      const newTracks = Number(item.new_tracks || 0);
+      const removedTracks = Number(item.removed_tracks || 0);
+      const hasChanges = newTracks > 0 || removedTracks > 0;
+      if (hasChanges) {
+        const updateBtn = document.createElement("button");
+        updateBtn.className = "playlist-update-button";
+        updateBtn.dataset.playlistId = item.id;
+        const parts = [];
+        if (newTracks > 0) parts.push(`+${newTracks}`);
+        if (removedTracks > 0) parts.push(`-${removedTracks}`);
+        updateBtn.textContent = `Update (${parts.join("/")})`;
+        actions.appendChild(updateBtn);
+      }
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "playlist-delete-button";
+      deleteBtn.dataset.playlistId = item.id;
+      deleteBtn.title = "Remove playlist tracking";
+      deleteBtn.setAttribute("aria-label", "Remove playlist tracking");
+      deleteBtn.textContent = "🗑";
+      actions.appendChild(deleteBtn);
+
+      li.appendChild(actions);
+      playlistTrackedList.appendChild(li);
+    });
+  };
+
+  const updateTrackedPlaylists = async (options = {}) => {
+    if (!playlistTrackedList) return false;
+    const { notify = false } = options;
+    try {
+      const response = await fetch("/api/tracked_playlists");
+      if (!response.ok) {
+        throw new Error("Failed to fetch tracked playlists.");
+      }
+      const data = await response.json();
+      renderTrackedPlaylists(data.playlists || []);
+      if (notify) {
+        displayMessage("Playlist updates checked.");
+      }
+      return true;
+    } catch (error) {
+      console.error("Error loading tracked playlists:", error);
+      if (notify) {
+        displayMessage("Failed to check playlist updates.", "error");
+      }
+      return false;
+    }
   };
 
   // Function to display transient messages
@@ -254,6 +348,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!infoResponse.ok) throw new Error("Failed to fetch URL info");
 
       const info = await infoResponse.json();
+      modalAction = "download-playlist";
       pendingUrl = url;
       modalInput.value = info.title || "Playlist";
       modal.classList.add("show");
@@ -268,10 +363,113 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  if (playlistTrackForm) {
+    playlistTrackForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const url = (playlistTrackInput.value || "").trim();
+      if (!url) {
+        displayMessage("Please enter a playlist URL.", "error");
+        return;
+      }
+
+      let suggestedName = "Playlist";
+      try {
+        const infoResponse = await fetch(`/api/get-info?url=${encodeURIComponent(url)}`);
+        if (infoResponse.ok) {
+          const info = await infoResponse.json();
+          suggestedName = info.title || suggestedName;
+        }
+      } catch (error) {
+        console.error("Error fetching playlist info for tracking:", error);
+      }
+
+      modalAction = "track-playlist";
+      pendingTrackUrl = url;
+      modalInput.value = suggestedName;
+      modal.classList.add("show");
+      modalInput.focus();
+      modalInput.select();
+    });
+  }
+
+  if (playlistRefreshBtn) {
+    playlistRefreshBtn.addEventListener("click", async () => {
+      playlistRefreshBtn.disabled = true;
+      const originalText = playlistRefreshBtn.textContent;
+      playlistRefreshBtn.textContent = "Checking...";
+      try {
+        await updateTrackedPlaylists({ notify: true });
+      } finally {
+        playlistRefreshBtn.disabled = false;
+        playlistRefreshBtn.textContent = originalText;
+      }
+    });
+  }
+
+  if (playlistTrackedList) {
+    playlistTrackedList.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const playlistId = target.dataset.playlistId;
+      if (!playlistId) return;
+
+      if (target.classList.contains("playlist-update-button")) {
+        try {
+          const response = await fetch("/api/tracked_playlists/ack-update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: playlistId }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data && data.error ? data.error : "Failed to update playlist tracking.");
+          }
+          displayMessage(data.message || "Playlist resync started.");
+          updateTrackedPlaylists();
+        } catch (error) {
+          console.error("Error acknowledging playlist update:", error);
+          displayMessage(error.message || "Failed to update playlist tracking.", "error");
+        }
+        return;
+      }
+
+      if (target.classList.contains("playlist-delete-button")) {
+        const confirmRemove = confirm("Remove this playlist from tracking?");
+        if (!confirmRemove) {
+          return;
+        }
+
+        const removeM3u8 = confirm("Also remove the playlist .m3u8 file from disk?\n\nPress OK to remove .m3u8, or Cancel to keep it.");
+
+        try {
+          const response = await fetch("/api/tracked_playlists/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: playlistId, delete_m3u8: removeM3u8 }),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data && data.error ? data.error : "Failed to remove tracked playlist.");
+          }
+          displayMessage(data.message || "Playlist removed from tracking.");
+          updateTrackedPlaylists();
+        } catch (error) {
+          console.error("Error deleting tracked playlist:", error);
+          displayMessage(error.message || "Failed to remove tracked playlist.", "error");
+        }
+      }
+    });
+  }
+
   // Modal handlers
   modalCancelBtn.addEventListener("click", () => {
     modal.classList.remove("show");
     pendingUrl = "";
+    pendingTrackUrl = "";
+    modalAction = "";
   });
 
   modalOkBtn.addEventListener("click", async () => {
@@ -282,6 +480,31 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     modal.classList.remove("show");
+
+    if (modalAction === "track-playlist") {
+      try {
+        const response = await fetch("/api/tracked_playlists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: pendingTrackUrl, name: playlistName }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data && data.error ? data.error : "Failed to track playlist.");
+        }
+        playlistTrackInput.value = "";
+        displayMessage(data.message || (data.exists ? "Playlist is already tracked." : "Playlist added to tracking."));
+        updateTrackedPlaylists();
+      } catch (error) {
+        console.error("Error tracking playlist:", error);
+        displayMessage(error.message || "Failed to track playlist.", "error");
+      } finally {
+        pendingTrackUrl = "";
+        modalAction = "";
+      }
+      return;
+    }
+
     submitBtn.disabled = true;
     const originalBtnText = submitBtn.textContent;
     submitBtn.textContent = "Creating...";
@@ -328,6 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.disabled = false;
       submitBtn.textContent = originalBtnText;
       pendingUrl = "";
+      modalAction = "";
     }
   });
 
@@ -411,8 +635,13 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initial and periodic status updates
+  const playlistUpdateInterval_MS = 3 * 24 * 60 * 60 * 1000;
   fetchLogs();
   updateDownloadedFiles();
+  updateTrackedPlaylists();
   setInterval(fetchLogs, 1000);
   setInterval(updateDownloadedFiles, 3000);
+  setInterval(() => {
+    updateTrackedPlaylists();
+  }, playlistUpdateInterval_MS);
 });

@@ -1,10 +1,12 @@
 import concurrent.futures
-import concurrent.futures
+import json
 import logging
 import os
+import re
 import sys
 import threading
-from urllib.parse import urlparse
+import time
+from urllib.parse import parse_qs, urlparse
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from waitress import serve
 import downloader
@@ -72,6 +74,191 @@ sys.stderr = StreamCapture(sys.stderr)
 
 
 app = Flask(__name__)
+
+PLAYLIST_TRACKER_FILE = os.path.join(downloader.CONFIG_DIR, "tracked_playlists.json")
+playlist_tracker_lock = threading.Lock()
+
+
+def _load_tracked_playlists():
+    if not os.path.exists(PLAYLIST_TRACKER_FILE):
+        return []
+    try:
+        with open(PLAYLIST_TRACKER_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_tracked_playlists(items):
+    os.makedirs(downloader.CONFIG_DIR, exist_ok=True)
+    with open(PLAYLIST_TRACKER_FILE, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
+def _get_remote_playlist_snapshot(url):
+    info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
+    entries = info.get("entries", []) if isinstance(info, dict) else []
+    title = (info.get("title") if isinstance(info, dict) else None) or "Playlist"
+    ids = set()
+    for entry in entries:
+        entry_url = (entry.get("url") if isinstance(entry, dict) else "") or ""
+        track_id = _extract_track_id(entry_url)
+        if track_id:
+            ids.add(track_id)
+    return title, entries, ids
+
+
+def _refresh_tracked_playlist(item):
+    title, entries, remote_ids = _get_remote_playlist_snapshot(item.get("url", ""))
+    tracked_ids = set(item.get("tracked_ids") or [])
+    if not tracked_ids and int(item.get("tracked_track_count", 0)) == 0 and remote_ids:
+        tracked_ids = set(remote_ids)
+        item["tracked_ids"] = sorted(tracked_ids)
+        item["tracked_track_count"] = len(tracked_ids)
+
+    added_ids = remote_ids - tracked_ids
+    removed_ids = tracked_ids - remote_ids
+    item["name"] = (item.get("name") or title or "Playlist").strip()
+    item["source_title"] = title
+    item["remote_track_count"] = len(entries)
+    item["new_tracks"] = len(added_ids)
+    item["removed_tracks"] = len(removed_ids)
+    item["change_count"] = len(added_ids) + len(removed_ids)
+    item["last_checked_at"] = int(time.time())
+    return item
+
+
+def _is_youtube_playlist_url(url):
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    is_youtube = host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com")
+    if not is_youtube:
+        return False
+    if (parsed.path or "").startswith("/playlist"):
+        return True
+    return "list" in parse_qs(parsed.query)
+
+
+def _extract_track_id(raw_url):
+    if not raw_url:
+        return ""
+    parsed = urlparse(raw_url)
+    hostname = (parsed.hostname or "").lower()
+    if hostname in ("youtu.be", "www.youtu.be"):
+        return parsed.path.strip("/")
+    qs = parse_qs(parsed.query)
+    return qs.get("v", [""])[0]
+
+
+def _collect_existing_track_ids(target_dir):
+    ids = set()
+    if not os.path.exists(target_dir):
+        return ids
+    pattern = r"\[([A-Za-z0-9_-]{11})\]\.mp3$"
+    for root, _, files in os.walk(target_dir):
+        for filename in files:
+            match = re.search(pattern, filename, re.IGNORECASE)
+            if match:
+                ids.add(match.group(1))
+    return ids
+
+
+def _read_m3u_track_ids(playlist_path):
+    ids = set()
+    if not os.path.exists(playlist_path):
+        return ids
+    try:
+        with open(playlist_path, "r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = re.search(r"\[([A-Za-z0-9_-]+)\](?:\.[A-Za-z0-9]+)?$", line)
+                if match:
+                    ids.add(match.group(1))
+    except Exception:
+        return set()
+    return ids
+
+
+def _sync_tracked_playlist(item, force=False):
+    url = (item.get("url") or "").strip()
+    if not url:
+        return {"success": False, "error": "Playlist URL is required."}
+    if not _is_youtube_playlist_url(url):
+        return {"success": False, "error": "Only YouTube playlist URLs are supported for tracking."}
+
+    target_dir = os.path.join(DOWNLOADS_DIR, "youtube")
+    os.makedirs(target_dir, exist_ok=True)
+
+    info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
+    source_title = (info.get("title") if isinstance(info, dict) else None) or "Playlist"
+    entries = info.get("entries", []) if isinstance(info, dict) else []
+    if not entries:
+        return {"success": False, "error": "Could not read playlist entries from YouTube URL."}
+
+    name_for_file = (item.get("name") or source_title or "Playlist").strip()
+    playlist_id = item.get("playlist_id") or downloader.sanitize_playlist_name(name_for_file, target_dir, unique=False)
+    playlist_id = os.path.basename(playlist_id) or "Playlist"
+    playlist_path = os.path.join(target_dir, f"{playlist_id}.m3u8")
+
+    normalized_entries = []
+    for entry in entries:
+        entry_url = (entry.get("url") if isinstance(entry, dict) else "") or ""
+        if not entry_url:
+            continue
+        normalized_entries.append({"url": entry_url, "id": _extract_track_id(entry_url)})
+
+    expected_ids = {entry["id"] for entry in normalized_entries if entry["id"]}
+    existing_ids = _collect_existing_track_ids(target_dir)
+    m3u_ids = _read_m3u_track_ids(playlist_path)
+
+    up_to_date = (
+        (not force)
+        and os.path.exists(playlist_path)
+        and bool(expected_ids)
+        and expected_ids.issubset(existing_ids)
+        and expected_ids == m3u_ids
+    )
+
+    queued_count = 0
+    if not up_to_date:
+        with open(playlist_path, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+        for entry in normalized_entries:
+            entry_url = entry["url"]
+            with state.status_lock:
+                state.download_statuses[entry_url] = "queued"
+            downloader.download_queue.put({
+                "type": "youtube",
+                "url": entry_url,
+                "create_m3u": False,
+                "playlist_path": playlist_path,
+            })
+            queued_count += 1
+
+    now = int(time.time())
+    item["name"] = name_for_file
+    item["source_title"] = source_title
+    item["job_type"] = "youtube"
+    item["playlist_id"] = playlist_id
+    item["path"] = playlist_path
+    item["remote_track_count"] = len(normalized_entries)
+    item["tracked_ids"] = sorted(expected_ids)
+    item["tracked_track_count"] = len(expected_ids) if expected_ids else len(normalized_entries)
+    item["new_tracks"] = 0
+    item["removed_tracks"] = 0
+    item["change_count"] = 0
+    item["last_checked_at"] = now
+    item["last_updated_at"] = now
+
+    return {
+        "success": True,
+        "up_to_date": up_to_date,
+        "queued_count": queued_count,
+        "track_count": len(normalized_entries),
+    }
 
 
 # Initialize thread pool executor
@@ -185,6 +372,120 @@ def create_playlist():
         "playlist_id": sanitized_name,
         "path": playlist_path,
         "track_count": len(entries)
+    })
+
+
+@app.route("/api/tracked_playlists", methods=["GET", "POST"])
+def tracked_playlists():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        requested_name = (data.get("name") or "").strip()
+        if not url:
+            return jsonify({"success": False, "error": "Playlist URL is required."}), 400
+
+        with playlist_tracker_lock:
+            items = _load_tracked_playlists()
+            target = next((x for x in items if x.get("url") == url), None)
+            was_existing = target is not None
+            if not target:
+                target = {
+                    "id": f"pl-{int(time.time() * 1000)}",
+                    "url": url,
+                    "created_at": int(time.time()),
+                    "tracked_track_count": 0,
+                    "remote_track_count": 0,
+                    "new_tracks": 0,
+                }
+                items.append(target)
+
+            if requested_name:
+                target["name"] = requested_name
+                if not target.get("playlist_id"):
+                    target_dir = os.path.join(DOWNLOADS_DIR, "youtube")
+                    os.makedirs(target_dir, exist_ok=True)
+                    target["playlist_id"] = downloader.sanitize_playlist_name(requested_name, target_dir, unique=False)
+
+            sync_result = _sync_tracked_playlist(target, force=False)
+            if not sync_result.get("success"):
+                return jsonify(sync_result), 400
+
+            _save_tracked_playlists(items)
+            return jsonify({
+                "success": True,
+                "exists": was_existing,
+                "playlist": target,
+                "sync": sync_result,
+                "message": "Playlist is up to date." if sync_result.get("up_to_date") else f"Playlist sync started. Queued {sync_result.get('queued_count', 0)} track(s).",
+            })
+
+    with playlist_tracker_lock:
+        items = _load_tracked_playlists()
+        refreshed_items = [_refresh_tracked_playlist(dict(item)) for item in items]
+        _save_tracked_playlists(refreshed_items)
+    return jsonify({"playlists": refreshed_items})
+
+
+@app.route("/api/tracked_playlists/ack-update", methods=["POST"])
+def ack_tracked_playlist_update():
+    data = request.get_json(silent=True) or {}
+    playlist_id = (data.get("id") or "").strip()
+    if not playlist_id:
+        return jsonify({"success": False, "error": "Playlist id is required."}), 400
+
+    with playlist_tracker_lock:
+        items = _load_tracked_playlists()
+        target = next((x for x in items if x.get("id") == playlist_id), None)
+        if not target:
+            return jsonify({"success": False, "error": "Playlist not found."}), 404
+
+        sync_result = _sync_tracked_playlist(target, force=True)
+        if not sync_result.get("success"):
+            return jsonify(sync_result), 400
+
+        _save_tracked_playlists(items)
+
+    return jsonify({
+        "success": True,
+        "playlist": target,
+        "sync": sync_result,
+        "message": f"Playlist resync started. Queued {sync_result.get('queued_count', 0)} track(s).",
+    })
+
+
+@app.route("/api/tracked_playlists/delete", methods=["POST"])
+def delete_tracked_playlist():
+    data = request.get_json(silent=True) or {}
+    playlist_id = (data.get("id") or "").strip()
+    delete_m3u8 = bool(data.get("delete_m3u8", False))
+
+    if not playlist_id:
+        return jsonify({"success": False, "error": "Playlist id is required."}), 400
+
+    with playlist_tracker_lock:
+        items = _load_tracked_playlists()
+        target_index = next((i for i, x in enumerate(items) if x.get("id") == playlist_id), None)
+        if target_index is None:
+            return jsonify({"success": False, "error": "Playlist not found."}), 404
+
+        target = items[target_index]
+        playlist_path = os.path.normpath(target.get("path") or "")
+        youtube_dir = os.path.normpath(os.path.join(DOWNLOADS_DIR, "youtube"))
+
+        removed_m3u8 = False
+        if delete_m3u8 and playlist_path and playlist_path.startswith(youtube_dir + os.sep):
+            if os.path.exists(playlist_path) and os.path.isfile(playlist_path):
+                os.remove(playlist_path)
+                removed_m3u8 = True
+
+        removed_playlist = items.pop(target_index)
+        _save_tracked_playlists(items)
+
+    return jsonify({
+        "success": True,
+        "playlist": removed_playlist,
+        "removed_m3u8": removed_m3u8,
+        "message": "Playlist removed from tracking." if not removed_m3u8 else "Playlist removed from tracking and m3u8 deleted.",
     })
 
 

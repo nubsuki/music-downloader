@@ -59,6 +59,18 @@
           >
             Downloaded Songs
           </button>
+          <button
+            type="button"
+            class="tab-button"
+            role="tab"
+            id="tab-playlists"
+            aria-controls="playlists-section"
+            aria-selected="false"
+            tabindex="-1"
+            data-tab-target="playlists-section"
+          >
+            Playlists
+          </button>
         </div>
 
         <section id="activity-log-section" class="status-section tab-panel active" aria-labelledby="tab-activity">
@@ -73,6 +85,20 @@
             placeholder="Search downloaded songs..."
           />
           <ul id="downloaded-list"></ul>
+        </section>
+        <section id="playlists-section" class="status-section tab-panel" aria-labelledby="tab-playlists" hidden>
+          <h2>Tracked Playlists</h2>
+          <form id="playlist-track-form" class="inline-form">
+            <input
+              type="text"
+              id="playlist-track-input"
+              placeholder="Paste YouTube playlist URL"
+              required
+            />
+            <button type="submit">Track Playlist</button>
+            <button type="button" id="playlist-refresh-btn" class="secondary-button">Refresh Updates</button>
+          </form>
+          <ul id="playlist-tracked-list"></ul>
         </section>
       </div>
     </div>
