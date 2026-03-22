@@ -201,7 +201,10 @@ def _sync_tracked_playlist(item, force=False):
     name_for_file = (item.get("name") or source_title or "Playlist").strip()
     playlist_id = item.get("playlist_id") or downloader.sanitize_playlist_name(name_for_file, target_dir, unique=False)
     playlist_id = os.path.basename(playlist_id) or "Playlist"
-    playlist_path = os.path.join(target_dir, f"{playlist_id}.m3u8")
+    playlist_path = os.path.normpath(os.path.join(target_dir, f"{playlist_id}.m3u8"))
+    target_dir_norm = os.path.normpath(target_dir)
+    if not playlist_path.startswith(target_dir_norm + os.sep):
+        return {"success": False, "error": "Invalid playlist path."}
 
     normalized_entries = []
     for entry in entries:
@@ -455,6 +458,9 @@ def ack_tracked_playlist_update():
 
 @app.route("/api/tracked_playlists/delete", methods=["POST"])
 def delete_tracked_playlist():
+    if not ENABLE_DELETE:
+        return jsonify({"success": False, "error": "Delete functionality is disabled."}), 403
+
     data = request.get_json(silent=True) or {}
     playlist_id = (data.get("id") or "").strip()
     delete_m3u8 = bool(data.get("delete_m3u8", False))

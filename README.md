@@ -135,7 +135,7 @@ services:
 | `MAX_WORKERS` | `3` | Number of concurrent downloads. |
 | `RESTRICT_FILENAMES` | `false` | If `true`, forces song filenames to ASCII (fixes Unicode issues on Docker/Windows). |
 | `AUTO_PLAYLIST` | `false` | If `true`, hides the `.m3u8` checkbox and automatically opens playlist creation for playlist/album URLs. |
-| `ENABLE_DELETE` | `false` | Enables delete button in the UI and the delete API endpoint. |
+| `ENABLE_DELETE` | `false` | Enables delete buttons in the UI and delete API endpoints (downloaded files + tracked playlist remove). |
 | `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
 | `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |
 | `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive and configs are stored. |

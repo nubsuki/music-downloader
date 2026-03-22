@@ -264,13 +264,15 @@ document.addEventListener("DOMContentLoaded", () => {
         actions.appendChild(updateBtn);
       }
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "playlist-delete-button";
-      deleteBtn.dataset.playlistId = item.id;
-      deleteBtn.title = "Remove playlist tracking";
-      deleteBtn.setAttribute("aria-label", "Remove playlist tracking");
-      deleteBtn.textContent = "🗑";
-      actions.appendChild(deleteBtn);
+      if (window.APP_CONFIG && window.APP_CONFIG.enableDelete) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "playlist-delete-button";
+        deleteBtn.dataset.playlistId = item.id;
+        deleteBtn.title = "Remove playlist tracking";
+        deleteBtn.setAttribute("aria-label", "Remove playlist tracking");
+        deleteBtn.textContent = "🗑";
+        actions.appendChild(deleteBtn);
+      }
 
       li.appendChild(actions);
       playlistTrackedList.appendChild(li);
