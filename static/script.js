@@ -142,6 +142,52 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let lastLogId = 0;
+  const POLL_INTERVAL_LOGS_MS = 1500;
+  const POLL_INTERVAL_FILES_MS = 5000;
+  const POLL_INTERVAL_TRACKED_PLAYLISTS_MS = 3 * 24 * 60 * 60 * 1000;
+  let isFetchingLogs = false;
+  let isUpdatingDownloaded = false;
+  let isUpdatingTracked = false;
+  const networkErrorLogAt = new Map();
+
+  const shouldLogNetworkError = (key, cooldownMs = 10000) => {
+    const now = Date.now();
+    const lastAt = networkErrorLogAt.get(key) || 0;
+    if (now - lastAt < cooldownMs) {
+      return false;
+    }
+    networkErrorLogAt.set(key, now);
+    return true;
+  };
+
+  const isLikelyNetworkError = (error) => {
+    const message = error && error.message ? String(error.message) : "";
+    return error && (error.name === "AbortError" || error instanceof TypeError || message.includes("NetworkError") || message.includes("Failed to fetch"));
+  };
+
+  const fetchJsonWithRetry = async (url, options = {}, retries = 1, timeoutMs = 12000) => {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
+        clearTimeout(timer);
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+        return await response.json();
+      } catch (error) {
+        clearTimeout(timer);
+        lastError = error;
+        if (!isLikelyNetworkError(error) || attempt === retries) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+      }
+    }
+    throw lastError;
+  };
 
   const appendLogEntry = (entry) => {
     if (!activityLog) return;
@@ -155,12 +201,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const fetchLogs = async () => {
+    if (isFetchingLogs) return;
+    isFetchingLogs = true;
     try {
-      const response = await fetch(`/api/logs?after=${lastLogId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch logs.");
-      }
-      const data = await response.json();
+      const data = await fetchJsonWithRetry(`/api/logs?after=${lastLogId}`);
       if (Array.isArray(data.entries)) {
         data.entries.forEach(appendLogEntry);
       }
@@ -168,31 +212,31 @@ document.addEventListener("DOMContentLoaded", () => {
         lastLogId = data.latest_id;
       }
     } catch (error) {
-      console.error("Error fetching logs:", error);
+      if (shouldLogNetworkError("logs") || !isLikelyNetworkError(error)) {
+        console.error("Error fetching logs:", error);
+      }
+    } finally {
+      isFetchingLogs = false;
     }
   };
 
   // Function to fetch and update the list of downloaded files
   const updateDownloadedFiles = async () => {
+    if (isUpdatingDownloaded) return;
+    isUpdatingDownloaded = true;
     try {
-      const response = await fetch("/api/downloaded_files");
-      if (!response.ok) {
-        throw new Error("Failed to fetch downloaded files.");
-      }
-      const data = await response.json();
-      
-      // Update the downloaded files list
+      const data = await fetchJsonWithRetry("/api/downloaded_files");
       updateList(downloadedList, data.files, "item-downloaded");
-
-      // Re-apply current search filter after list refresh
       if (typeof applyDownloadedFilter === "function") {
         applyDownloadedFilter();
       }
-      
-      // Update MP3 counter
       updateMp3Counter(data.mp3_count);
     } catch (error) {
-      console.error("Error updating downloaded files:", error);
+      if (shouldLogNetworkError("files") || !isLikelyNetworkError(error)) {
+        console.error("Error updating downloaded files:", error);
+      }
+    } finally {
+      isUpdatingDownloaded = false;
     }
   };
 
@@ -280,25 +324,26 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const updateTrackedPlaylists = async (options = {}) => {
-    if (!playlistTrackedList) return false;
+    if (!playlistTrackedList || isUpdatingTracked) return false;
+    isUpdatingTracked = true;
     const { notify = false } = options;
     try {
-      const response = await fetch("/api/tracked_playlists");
-      if (!response.ok) {
-        throw new Error("Failed to fetch tracked playlists.");
-      }
-      const data = await response.json();
+      const data = await fetchJsonWithRetry("/api/tracked_playlists", {}, 1, 20000);
       renderTrackedPlaylists(data.playlists || []);
       if (notify) {
         displayMessage("Playlist updates checked.");
       }
       return true;
     } catch (error) {
-      console.error("Error loading tracked playlists:", error);
+      if (shouldLogNetworkError("tracked") || !isLikelyNetworkError(error)) {
+        console.error("Error loading tracked playlists:", error);
+      }
       if (notify) {
         displayMessage("Failed to check playlist updates.", "error");
       }
       return false;
+    } finally {
+      isUpdatingTracked = false;
     }
   };
 
@@ -637,13 +682,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Initial and periodic status updates
-  const playlistUpdateInterval_MS = 3 * 24 * 60 * 60 * 1000;
   fetchLogs();
   updateDownloadedFiles();
   updateTrackedPlaylists();
-  setInterval(fetchLogs, 1000);
-  setInterval(updateDownloadedFiles, 3000);
+  setInterval(fetchLogs, POLL_INTERVAL_LOGS_MS);
+  setInterval(updateDownloadedFiles, POLL_INTERVAL_FILES_MS);
   setInterval(() => {
     updateTrackedPlaylists();
-  }, playlistUpdateInterval_MS);
+  }, POLL_INTERVAL_TRACKED_PLAYLISTS_MS);
+
+  window.addEventListener("online", () => {
+    fetchLogs();
+    updateDownloadedFiles();
+    updateTrackedPlaylists();
+  });
 });
