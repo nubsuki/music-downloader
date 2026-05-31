@@ -275,6 +275,39 @@ worker_thread = threading.Thread(
 )
 worker_thread.start()
 
+# Background thread for auto-refreshing tracked playlists daily
+def auto_refresh_thread():
+    while True:
+        try:
+            print("[INFO] Checking playlists for auto-refresh...")
+            with playlist_tracker_lock:
+                items = _load_tracked_playlists()
+                updated_items = []
+                for item in items:
+                    if item.get("auto_refresh", False):
+                        refreshed_item = _refresh_tracked_playlist(dict(item))
+                        # Check if there are changes
+                        if refreshed_item.get("new_tracks", 0) > 0 or refreshed_item.get("removed_tracks", 0) > 0:
+                            print(f"[INFO] Auto-refreshing playlist: {refreshed_item.get('name', 'Playlist')}")
+                            sync_result = _sync_tracked_playlist(refreshed_item, force=True)
+                            if sync_result.get("success"):
+                                updated_items.append(refreshed_item)
+                            else:
+                                updated_items.append(refreshed_item)
+                        else:
+                            updated_items.append(refreshed_item)
+                    else:
+                        updated_items.append(item)
+                _save_tracked_playlists(updated_items)
+        except Exception as e:
+            logging.error("Error in auto-refresh thread", exc_info=True)
+        # Sleep for 1 day
+        time.sleep(86400)
+
+# Start the auto-refresh thread
+refresh_thread = threading.Thread(target=auto_refresh_thread, daemon=True)
+refresh_thread.start()
+
 
 @app.route("/")
 def index():
@@ -384,6 +417,21 @@ def tracked_playlists():
         data = request.get_json(silent=True) or {}
         url = (data.get("url") or "").strip()
         requested_name = (data.get("name") or "").strip()
+        auto_refresh = bool(data.get("auto_refresh", False))
+        playlist_id = (data.get("id") or "").strip()
+        
+        # If we have a playlist_id, we're just updating auto_refresh flag
+        if playlist_id:
+            with playlist_tracker_lock:
+                items = _load_tracked_playlists()
+                target = next((x for x in items if x.get("id") == playlist_id), None)
+                if not target:
+                    return jsonify({"success": False, "error": "Playlist not found."}), 404
+                target["auto_refresh"] = auto_refresh
+                _save_tracked_playlists(items)
+                return jsonify({"success": True, "playlist": target})
+        
+        # Otherwise, it's a new playlist to track
         if not url:
             return jsonify({"success": False, "error": "Playlist URL is required."}), 400
 
@@ -399,8 +447,11 @@ def tracked_playlists():
                     "tracked_track_count": 0,
                     "remote_track_count": 0,
                     "new_tracks": 0,
+                    "auto_refresh": auto_refresh,
                 }
                 items.append(target)
+            else:
+                target["auto_refresh"] = auto_refresh
 
             if requested_name:
                 target["name"] = requested_name

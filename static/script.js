@@ -144,7 +144,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastLogId = 0;
   const POLL_INTERVAL_LOGS_MS = 1500;
   const POLL_INTERVAL_FILES_MS = 5000;
-  const POLL_INTERVAL_TRACKED_PLAYLISTS_MS = 3 * 24 * 60 * 60 * 1000;
   let isFetchingLogs = false;
   let isUpdatingDownloaded = false;
   let isUpdatingTracked = false;
@@ -268,9 +267,36 @@ document.addEventListener("DOMContentLoaded", () => {
       const details = document.createElement("div");
       details.className = "playlist-track-details";
 
+      const titleRow = document.createElement("div");
+      titleRow.style.display = "flex";
+      titleRow.style.alignItems = "center";
+      titleRow.style.gap = "8px";
+
       const title = document.createElement("div");
       title.className = "playlist-track-title";
       title.textContent = item.name || "Playlist";
+
+      const autoRefreshLabel = document.createElement("label");
+      autoRefreshLabel.style.display = "flex";
+      autoRefreshLabel.style.alignItems = "center";
+      autoRefreshLabel.style.gap = "4px";
+      autoRefreshLabel.style.fontSize = "0.85em";
+      autoRefreshLabel.style.cursor = "pointer";
+
+      const autoRefreshCheckbox = document.createElement("input");
+      autoRefreshCheckbox.type = "checkbox";
+      autoRefreshCheckbox.checked = !!item.auto_refresh;
+      autoRefreshCheckbox.dataset.playlistId = item.id;
+      autoRefreshCheckbox.className = "auto-refresh-checkbox";
+
+      const autoRefreshText = document.createElement("span");
+      autoRefreshText.textContent = "Auto-refresh daily";
+
+      autoRefreshLabel.appendChild(autoRefreshCheckbox);
+      autoRefreshLabel.appendChild(autoRefreshText);
+
+      titleRow.appendChild(title);
+      titleRow.appendChild(autoRefreshLabel);
 
       const meta = document.createElement("div");
       meta.className = "playlist-track-meta";
@@ -287,7 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       meta.textContent = `${tracked} tracked song${tracked !== 1 ? "s" : ""} • ${remote} currently in playlist • ${diffText}`;
 
-      details.appendChild(title);
+      details.appendChild(titleRow);
       details.appendChild(meta);
       li.appendChild(details);
 
@@ -398,6 +424,9 @@ document.addEventListener("DOMContentLoaded", () => {
       modalAction = "download-playlist";
       pendingUrl = url;
       modalInput.value = info.title || "Playlist";
+      // Hide auto-refresh checkbox when opening modal for download-playlist
+      const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      if (autoRefreshLabel) autoRefreshLabel.style.display = "none";
       modal.classList.add("show");
       modalInput.focus();
       modalInput.select();
@@ -433,6 +462,11 @@ document.addEventListener("DOMContentLoaded", () => {
       modalAction = "track-playlist";
       pendingTrackUrl = url;
       modalInput.value = suggestedName;
+      // Reset auto-refresh checkbox when opening modal for track-playlist
+      const autoRefreshCheckbox = document.getElementById("auto-refresh-modal-checkbox");
+      const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      if (autoRefreshCheckbox) autoRefreshCheckbox.checked = false;
+      if (autoRefreshLabel) autoRefreshLabel.style.display = "flex";
       modal.classList.add("show");
       modalInput.focus();
       modalInput.select();
@@ -509,6 +543,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
     });
+
+    // Handle auto-refresh checkbox changes
+    playlistTrackedList.addEventListener("change", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.classList.contains("auto-refresh-checkbox")) {
+        return;
+      }
+
+      const playlistId = target.dataset.playlistId;
+      const isChecked = target.checked;
+
+      try {
+        const response = await fetch("/api/tracked_playlists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: playlistId, auto_refresh: isChecked }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data && data.error ? data.error : "Failed to update auto-refresh setting.");
+        }
+        displayMessage(isChecked ? "Auto-refresh enabled for this playlist." : "Auto-refresh disabled for this playlist.");
+      } catch (error) {
+        console.error("Error updating auto-refresh:", error);
+        displayMessage(error.message || "Failed to update auto-refresh setting.", "error");
+        // Revert checkbox state on error
+        target.checked = !isChecked;
+      }
+    });
   }
 
   // Modal handlers
@@ -530,10 +593,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (modalAction === "track-playlist") {
       try {
+        const autoRefreshCheckbox = document.getElementById("auto-refresh-modal-checkbox");
+        const autoRefresh = autoRefreshCheckbox ? autoRefreshCheckbox.checked : false;
         const response = await fetch("/api/tracked_playlists", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: pendingTrackUrl, name: playlistName }),
+          body: JSON.stringify({ url: pendingTrackUrl, name: playlistName, auto_refresh: autoRefresh }),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -687,9 +752,6 @@ document.addEventListener("DOMContentLoaded", () => {
   updateTrackedPlaylists();
   setInterval(fetchLogs, POLL_INTERVAL_LOGS_MS);
   setInterval(updateDownloadedFiles, POLL_INTERVAL_FILES_MS);
-  setInterval(() => {
-    updateTrackedPlaylists();
-  }, POLL_INTERVAL_TRACKED_PLAYLISTS_MS);
 
   window.addEventListener("online", () => {
     fetchLogs();

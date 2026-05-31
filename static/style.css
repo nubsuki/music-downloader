@@ -505,3 +505,16 @@ button:hover {
     flex-basis: auto;
   }
 }
+
+.modal-content input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+#auto-refresh-modal-label {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
