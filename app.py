@@ -11,6 +11,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 from waitress import serve
 import downloader
 import state
+from downloader import extract_youtube_playlist_id
 
 
 logging.getLogger("waitress.queue").setLevel(logging.ERROR)
@@ -121,6 +122,8 @@ def _refresh_tracked_playlist(item):
     removed_ids = tracked_ids - remote_ids
     item["name"] = (item.get("name") or title or "Playlist").strip()
     item["source_title"] = title
+    if not item.get("youtube_playlist_id"):
+        item["youtube_playlist_id"] = extract_youtube_playlist_id(item.get("url", ""))
     item["remote_track_count"] = len(entries)
     item["new_tracks"] = len(added_ids)
     item["removed_tracks"] = len(removed_ids)
@@ -363,6 +366,24 @@ def create_playlist():
     if not playlist_path.startswith(target_dir_norm + os.sep):
         return jsonify({"success": False, "error": "Invalid playlist name."}), 400
 
+    # Check for existing playlist by YouTube playlist ID first
+    yt_playlist_id = extract_youtube_playlist_id(url) if job_type == "youtube" else None
+    existing_yt_playlist = None
+    if yt_playlist_id:
+        with playlist_tracker_lock:
+            items = _load_tracked_playlists()
+            existing_yt_playlist = next((x for x in items if x.get("youtube_playlist_id") == yt_playlist_id), None)
+
+    if existing_yt_playlist and not overwrite:
+        return jsonify({
+            "success": False,
+            "error": f"This playlist is already tracked as '{existing_yt_playlist.get('name')}'.",
+            "exists": True,
+            "exists_as_tracked": True,
+            "existing_tracked_playlist": existing_yt_playlist,
+            "existing_path": existing_yt_playlist.get("path")
+        }), 409
+
     if os.path.exists(playlist_path) and not overwrite:
         suggested = downloader.sanitize_playlist_name(name, target_dir, unique=True)
         return jsonify({
@@ -384,6 +405,8 @@ def create_playlist():
     # Fetch track info to queue individual downloads
     info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
     entries = info.get("entries", [])
+    if not yt_playlist_id and job_type == "youtube":
+        yt_playlist_id = info.get("playlist_id")
 
     if not entries:
         # Fallback for single video or if info fetch failed
@@ -408,11 +431,12 @@ def create_playlist():
         # Track this playlist
         with playlist_tracker_lock:
             items = _load_tracked_playlists()
-            target = next((x for x in items if x.get("url") == url), None)
+            target = next((x for x in items if x.get("url") == url or (yt_playlist_id and x.get("youtube_playlist_id") == yt_playlist_id)), None)
             if not target:
                 target = {
                     "id": f"pl-{int(time.time() * 1000)}",
                     "url": url,
+                    "youtube_playlist_id": yt_playlist_id,
                     "created_at": int(time.time()),
                     "tracked_track_count": 0,
                     "remote_track_count": 0,
@@ -423,6 +447,8 @@ def create_playlist():
             target["name"] = name
             target["playlist_id"] = sanitized_name
             target["path"] = playlist_path
+            if yt_playlist_id:
+                target["youtube_playlist_id"] = yt_playlist_id
             # Update tracked playlist with current entries
             normalized_entries = []
             for entry in entries:
@@ -473,14 +499,20 @@ def tracked_playlists():
         if not url:
             return jsonify({"success": False, "error": "Playlist URL is required."}), 400
 
+        yt_playlist_id = extract_youtube_playlist_id(url)
+        if not yt_playlist_id:
+            info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
+            yt_playlist_id = info.get("playlist_id")
+
         with playlist_tracker_lock:
             items = _load_tracked_playlists()
-            target = next((x for x in items if x.get("url") == url), None)
+            target = next((x for x in items if x.get("url") == url or (yt_playlist_id and x.get("youtube_playlist_id") == yt_playlist_id)), None)
             was_existing = target is not None
             if not target:
                 target = {
                     "id": f"pl-{int(time.time() * 1000)}",
                     "url": url,
+                    "youtube_playlist_id": yt_playlist_id,
                     "created_at": int(time.time()),
                     "tracked_track_count": 0,
                     "remote_track_count": 0,
@@ -490,6 +522,8 @@ def tracked_playlists():
                 items.append(target)
             else:
                 target["auto_refresh"] = auto_refresh
+                if yt_playlist_id and not target.get("youtube_playlist_id"):
+                    target["youtube_playlist_id"] = yt_playlist_id
 
             if requested_name:
                 target["name"] = requested_name

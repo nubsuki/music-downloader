@@ -311,6 +311,21 @@ def get_spotify_info(url: str) -> dict:
         return {"title": "Spotify Playlist", "entries": []}
 
 
+def extract_youtube_playlist_id(url: str) -> str | None:
+    """Extracts YouTube playlist ID from URL if available."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    is_youtube = host == "youtu.be" or host == "youtube.com" or host.endswith(".youtube.com")
+    if not is_youtube:
+        return None
+    
+    qs = parse_qs(parsed.query)
+    if "list" in qs:
+        return qs["list"][0]
+    
+    return None
+
+
 def get_url_info(url: str, cookies_file_path: str = None) -> dict:
     """Fetches title and entry info for a URL."""
     if not _validate_youtube_url(url) and not _validate_spotify_url(url):
@@ -337,21 +352,26 @@ def get_url_info(url: str, cookies_file_path: str = None) -> dict:
         res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=False)
         if res.returncode != 0:
             return {"title": "Playlist", "entries": []}
-        
+            
         lines = res.stdout.strip().splitlines()
         if not lines:
             return {"title": "Playlist", "entries": []}
             
         entries = []
         playlist_title = None
+        playlist_id = extract_youtube_playlist_id(url)
         
         for line in lines:
             try:
                 data = json.loads(line)
+                if not playlist_id and data.get("playlist_id"):
+                    playlist_id = data.get("playlist_id")
                 if not playlist_title and data.get("playlist_title"):
                     playlist_title = data.get("playlist_title")
                 elif not playlist_title and data.get("title") and "_type" in data and data["_type"] == "playlist":
                     playlist_title = data.get("title")
+                    if not playlist_id and data.get("id"):
+                        playlist_id = data.get("id")
                 
                 # If it's a single video, its title is the playlist title for our purposes
                 if not playlist_title and data.get("title"):
@@ -372,7 +392,8 @@ def get_url_info(url: str, cookies_file_path: str = None) -> dict:
         
         return {
             "title": playlist_title or "Playlist",
-            "entries": entries
+            "entries": entries,
+            "playlist_id": playlist_id
         }
     except Exception as e:
         print(f"[ERROR] Failed to get URL info: {e}")

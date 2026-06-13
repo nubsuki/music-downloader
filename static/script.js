@@ -269,12 +269,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const titleRow = document.createElement("div");
       titleRow.style.display = "flex";
-      titleRow.style.alignItems = "center";
-      titleRow.style.gap = "8px";
+      titleRow.style.flexDirection = "column";
+      titleRow.style.alignItems = "flex-start";
+      titleRow.style.gap = "4px";
 
       const title = document.createElement("div");
       title.className = "playlist-track-title";
       title.textContent = item.name || "Playlist";
+
+      const sourceTitle = document.createElement("div");
+      sourceTitle.style.fontSize = "0.85em";
+      sourceTitle.style.color = "#888";
+      sourceTitle.style.fontStyle = "italic";
+      let sourceTitleText = '';
+      if (item.source_title && item.source_title !== item.name) {
+        sourceTitleText = `Source: ${item.source_title}`;
+      } else if (item.source_title) {
+        sourceTitleText = `Source: ${item.source_title}`;
+      }
+      if (item.youtube_playlist_id) {
+        const playlistLink = document.createElement('a');
+        playlistLink.href = `https://www.youtube.com/playlist?list=${item.youtube_playlist_id}`;
+        playlistLink.target = '_blank';
+        playlistLink.rel = 'noopener noreferrer';
+        playlistLink.textContent = item.youtube_playlist_id;
+        playlistLink.style.color = '#007bff';
+        playlistLink.style.textDecoration = 'none';
+        playlistLink.style.borderBottom = '1px dotted #007bff';
+        if (sourceTitleText) {
+          sourceTitle.textContent = sourceTitleText + ' • ';
+          sourceTitle.appendChild(playlistLink);
+        } else {
+          sourceTitle.appendChild(playlistLink);
+        }
+      } else {
+        sourceTitle.textContent = sourceTitleText;
+      }
 
       const autoRefreshLabel = document.createElement("label");
       autoRefreshLabel.style.display = "flex";
@@ -296,6 +326,9 @@ document.addEventListener("DOMContentLoaded", () => {
       autoRefreshLabel.appendChild(autoRefreshText);
 
       titleRow.appendChild(title);
+      if (sourceTitle.textContent) {
+        titleRow.appendChild(sourceTitle);
+      }
       titleRow.appendChild(autoRefreshLabel);
 
       const meta = document.createElement("div");
@@ -646,6 +679,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let payload = { url: pendingUrl, name: playlistName, overwrite: false, track_playlist: trackPlaylist };
       let { resp, data } = await makeRequest(payload);
+
+      if (resp.status === 409 && data && data.exists_as_tracked) {
+        alert(`This playlist is already tracked as "${data.existing_tracked_playlist?.name || 'a playlist'}". Please use the existing tracked playlist.`);
+        return;
+      }
 
       if (resp.status === 409 && data && data.exists) {
         const suggested = data.suggested_name || `${playlistName} (1)`;
