@@ -31,7 +31,7 @@
           <span>.m3u8</span>
         </label>
         {% endif %}
-        <button type="submit">Add to Queue</button>
+        <button type="submit">Download</button>
       </form>
       <div id="message-container"></div>
 
@@ -89,6 +89,11 @@
         </section>
         <section id="playlists-section" class="status-section tab-panel" aria-labelledby="tab-playlists" hidden>
           <h2>Tracked Playlists</h2>
+          <input
+            type="text"
+            id="playlist-search-input"
+            placeholder="Search tracked playlists..."
+          />
           <form id="playlist-track-form" class="inline-form">
             <input
               type="text"
@@ -107,9 +112,13 @@
     <!-- Playlist Modal -->
   <div id="playlist-modal" class="modal">
     <div class="modal-content">
-      <h3>Create Playlist</h3>
-      <p>Enter a name for your playlist:</p>
+      <h3 id="modal-title">Create Playlist</h3>
+      <p id="modal-description">Enter a name for your playlist:</p>
       <input type="text" id="playlist-name-input" placeholder="Playlist Name" />
+      <label id="track-playlist-modal-label" style="display: none;">
+        <input type="checkbox" id="track-playlist-modal-checkbox" />
+        Track this playlist for updates
+      </label>
       <label id="auto-refresh-modal-label">
         <input type="checkbox" id="auto-refresh-modal-checkbox" />
         Auto-refresh daily and download updates

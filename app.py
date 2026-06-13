@@ -333,6 +333,7 @@ def create_playlist():
     url = data.get("url")
     name = data.get("name")
     overwrite = bool(data.get("overwrite", False))
+    track_playlist = bool(data.get("track_playlist", False))
     
     if not url or not name:
         return jsonify({"success": False, "error": "URL and name are required."}), 400
@@ -402,6 +403,43 @@ def create_playlist():
             "create_m3u": False, # manually managing the M3U8
             "playlist_path": playlist_path
         })
+
+    if track_playlist:
+        # Track this playlist
+        with playlist_tracker_lock:
+            items = _load_tracked_playlists()
+            target = next((x for x in items if x.get("url") == url), None)
+            if not target:
+                target = {
+                    "id": f"pl-{int(time.time() * 1000)}",
+                    "url": url,
+                    "created_at": int(time.time()),
+                    "tracked_track_count": 0,
+                    "remote_track_count": 0,
+                    "new_tracks": 0,
+                    "auto_refresh": False,
+                }
+                items.append(target)
+            target["name"] = name
+            target["playlist_id"] = sanitized_name
+            target["path"] = playlist_path
+            # Update tracked playlist with current entries
+            normalized_entries = []
+            for entry in entries:
+                entry_url = entry.get("url")
+                if not entry_url:
+                    continue
+                normalized_entries.append({"url": entry_url, "id": _extract_track_id(entry_url)})
+            expected_ids = {entry["id"] for entry in normalized_entries if entry["id"]}
+            target["tracked_ids"] = sorted(expected_ids)
+            target["tracked_track_count"] = len(expected_ids) if expected_ids else len(normalized_entries)
+            target["remote_track_count"] = len(normalized_entries)
+            target["new_tracks"] = 0
+            target["removed_tracks"] = 0
+            target["change_count"] = 0
+            target["last_checked_at"] = int(time.time())
+            target["last_updated_at"] = int(time.time())
+            _save_tracked_playlists(items)
 
     return jsonify({
         "success": True,

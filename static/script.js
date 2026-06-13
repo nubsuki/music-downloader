@@ -356,6 +356,9 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const data = await fetchJsonWithRetry("/api/tracked_playlists", {}, 1, 20000);
       renderTrackedPlaylists(data.playlists || []);
+      if (typeof applyPlaylistFilter === "function") {
+        applyPlaylistFilter();
+      }
       if (notify) {
         displayMessage("Playlist updates checked.");
       }
@@ -424,8 +427,12 @@ document.addEventListener("DOMContentLoaded", () => {
       modalAction = "download-playlist";
       pendingUrl = url;
       modalInput.value = info.title || "Playlist";
-      // Hide auto-refresh checkbox when opening modal for download-playlist
+      // Show track playlist checkbox, hide auto-refresh checkbox when opening modal for download-playlist
+      const trackPlaylistLabel = document.getElementById("track-playlist-modal-label");
+      const trackPlaylistCheckbox = document.getElementById("track-playlist-modal-checkbox");
       const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      if (trackPlaylistLabel) trackPlaylistLabel.style.display = "flex";
+      if (trackPlaylistCheckbox) trackPlaylistCheckbox.checked = false;
       if (autoRefreshLabel) autoRefreshLabel.style.display = "none";
       modal.classList.add("show");
       modalInput.focus();
@@ -462,9 +469,11 @@ document.addEventListener("DOMContentLoaded", () => {
       modalAction = "track-playlist";
       pendingTrackUrl = url;
       modalInput.value = suggestedName;
-      // Reset auto-refresh checkbox when opening modal for track-playlist
+      // Hide track playlist checkbox, reset auto-refresh checkbox when opening modal for track-playlist
+      const trackPlaylistLabel = document.getElementById("track-playlist-modal-label");
       const autoRefreshCheckbox = document.getElementById("auto-refresh-modal-checkbox");
       const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      if (trackPlaylistLabel) trackPlaylistLabel.style.display = "none";
       if (autoRefreshCheckbox) autoRefreshCheckbox.checked = false;
       if (autoRefreshLabel) autoRefreshLabel.style.display = "flex";
       modal.classList.add("show");
@@ -632,7 +641,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return { resp, data };
       };
 
-      let payload = { url: pendingUrl, name: playlistName, overwrite: false };
+      const trackPlaylistCheckbox = document.getElementById("track-playlist-modal-checkbox");
+      const trackPlaylist = trackPlaylistCheckbox ? trackPlaylistCheckbox.checked : false;
+
+      let payload = { url: pendingUrl, name: playlistName, overwrite: false, track_playlist: trackPlaylist };
       let { resp, data } = await makeRequest(payload);
 
       if (resp.status === 409 && data && data.exists) {
@@ -656,6 +668,9 @@ document.addEventListener("DOMContentLoaded", () => {
       urlInput.value = "";
       fetchLogs();
       updateDownloadedFiles();
+      if (trackPlaylist) {
+        updateTrackedPlaylists();
+      }
     } catch (error) {
       console.error("Error creating playlist:", error);
       displayMessage(error.message, "error");
@@ -678,6 +693,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const downloadedSearchInput = document.getElementById(
     "downloaded-search-input"
   );
+  const playlistSearchInput = document.getElementById(
+    "playlist-search-input"
+  );
   const normalizeForSearch = (str) => {
     return (str || "")
       .normalize("NFKD")
@@ -696,6 +714,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
   downloadedSearchInput.addEventListener("keyup", applyDownloadedFilter);
+
+  // Event listener for the playlist search bar
+  const applyPlaylistFilter = () => {
+    const filter = normalizeForSearch(playlistSearchInput.value);
+    const items = playlistTrackedList.getElementsByTagName("li");
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const text = item.textContent || item.innerText;
+      const normalizedText = normalizeForSearch(text);
+      item.style.display = normalizedText.indexOf(filter) > -1 ? "" : "none";
+    }
+  };
+  if (playlistSearchInput) {
+    playlistSearchInput.addEventListener("keyup", applyPlaylistFilter);
+  }
 
   // Event listener for deleting downloaded files
   downloadedList.addEventListener("click", async (event) => {
