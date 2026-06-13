@@ -9,6 +9,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='style.css') }}"
     />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   </head>
   <body>
     <div class="container">
@@ -96,7 +97,7 @@
               required
             />
             <button type="submit">Track Playlist</button>
-            <button type="button" id="playlist-refresh-btn" class="secondary-button">Refresh Updates</button>
+            <button type="button" id="playlist-refresh-btn" class="secondary-button" title="Check all tracked playlists for new or removed songs">Refresh All</button>
           </form>
           <ul id="playlist-tracked-list"></ul>
         </section>

@@ -340,7 +340,7 @@ document.addEventListener("DOMContentLoaded", () => {
         deleteBtn.dataset.playlistId = item.id;
         deleteBtn.title = "Remove playlist tracking";
         deleteBtn.setAttribute("aria-label", "Remove playlist tracking");
-        deleteBtn.textContent = "🗑";
+        deleteBtn.innerHTML = "<i class=\"bi bi-trash3\"></i>";
         actions.appendChild(deleteBtn);
       }
 
@@ -477,7 +477,7 @@ document.addEventListener("DOMContentLoaded", () => {
     playlistRefreshBtn.addEventListener("click", async () => {
       playlistRefreshBtn.disabled = true;
       const originalText = playlistRefreshBtn.textContent;
-      playlistRefreshBtn.textContent = "Checking...";
+      playlistRefreshBtn.textContent = "Refreshing All...";
       try {
         await updateTrackedPlaylists({ notify: true });
       } finally {
