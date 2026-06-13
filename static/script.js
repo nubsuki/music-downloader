@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return p.includes("/playlist/") || p.includes("/album/") || rawUrl.includes(":playlist:") || rawUrl.includes(":album:");
       }
 
-      const isYouTube = host.includes("youtube.com") || host === "youtu.be";
+      const isYouTube = host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be";
       if (isYouTube) {
         if ((parsed.pathname || "").startsWith("/playlist")) return true;
         return parsed.searchParams.has("list");
