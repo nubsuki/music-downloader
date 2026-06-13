@@ -110,7 +110,7 @@ def _get_remote_playlist_snapshot(url):
     return title, entries, ids
 
 
-def _refresh_tracked_playlist(item):
+def _refresh_tracked_playlist(item, force=False):
     title, entries, remote_ids = _get_remote_playlist_snapshot(item.get("url", ""))
     tracked_ids = set(item.get("tracked_ids") or [])
     if not tracked_ids and int(item.get("tracked_track_count", 0)) == 0 and remote_ids:
@@ -288,7 +288,7 @@ def auto_refresh_thread():
                 updated_items = []
                 for item in items:
                     if item.get("auto_refresh", False):
-                        refreshed_item = _refresh_tracked_playlist(dict(item))
+                        refreshed_item = _refresh_tracked_playlist(dict(item), force=True)
                         # Check if there are changes
                         if refreshed_item.get("new_tracks", 0) > 0 or refreshed_item.get("removed_tracks", 0) > 0:
                             print(f"[INFO] Auto-refreshing playlist: {refreshed_item.get('name', 'Playlist')}")
@@ -477,6 +477,18 @@ def create_playlist():
 
 @app.route("/api/tracked_playlists", methods=["GET", "POST"])
 def tracked_playlists():
+    if request.method == "GET":
+        force = request.args.get("force", "false").lower() == "true"
+        with playlist_tracker_lock:
+            items = _load_tracked_playlists()
+            if force:
+                print(f"[INFO] Force-refreshing {len(items)} tracked playlists...")
+                refreshed_items = [_refresh_tracked_playlist(dict(item), force=True) for item in items]
+                _save_tracked_playlists(refreshed_items)
+                print(f"[INFO] Done refreshing and saved to tracked_playlists.json")
+                return jsonify({"playlists": refreshed_items})
+            else:
+                return jsonify({"playlists": items})
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
         url = (data.get("url") or "").strip()
@@ -544,12 +556,6 @@ def tracked_playlists():
                 "sync": sync_result,
                 "message": "Playlist is up to date." if sync_result.get("up_to_date") else f"Playlist sync started. Queued {sync_result.get('queued_count', 0)} track(s).",
             })
-
-    with playlist_tracker_lock:
-        items = _load_tracked_playlists()
-        refreshed_items = [_refresh_tracked_playlist(dict(item)) for item in items]
-        _save_tracked_playlists(refreshed_items)
-    return jsonify({"playlists": refreshed_items})
 
 
 @app.route("/api/tracked_playlists/ack-update", methods=["POST"])

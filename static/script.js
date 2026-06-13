@@ -385,15 +385,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateTrackedPlaylists = async (options = {}) => {
     if (!playlistTrackedList || isUpdatingTracked) return false;
     isUpdatingTracked = true;
-    const { notify = false } = options;
+    const { notify = false, force = false } = options;
     try {
-      const data = await fetchJsonWithRetry("/api/tracked_playlists", {}, 1, 20000);
+      const url = force ? "/api/tracked_playlists?force=true" : "/api/tracked_playlists";
+      const data = await fetchJsonWithRetry(url, {}, 1, 20000);
       renderTrackedPlaylists(data.playlists || []);
       if (typeof applyPlaylistFilter === "function") {
         applyPlaylistFilter();
       }
       if (notify) {
-        displayMessage("Playlist updates checked.");
+        displayMessage(force ? "Playlists refreshed successfully!" : "Playlist updates checked.");
       }
       return true;
     } catch (error) {
@@ -521,7 +522,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const originalText = playlistRefreshBtn.textContent;
       playlistRefreshBtn.textContent = "Refreshing All...";
       try {
-        await updateTrackedPlaylists({ notify: true });
+        await updateTrackedPlaylists({ notify: true, force: true });
       } finally {
         playlistRefreshBtn.disabled = false;
         playlistRefreshBtn.textContent = originalText;
@@ -536,10 +537,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const playlistId = target.dataset.playlistId;
+      const updateBtn = target.closest('.playlist-update-button');
+      const deleteBtn = target.closest('.playlist-delete-button');
+      const clickedButton = updateBtn || deleteBtn;
+      if (!clickedButton) return;
+
+      const playlistId = clickedButton.dataset.playlistId;
       if (!playlistId) return;
 
-      if (target.classList.contains("playlist-update-button")) {
+      if (updateBtn) {
         try {
           const response = await fetch("/api/tracked_playlists/ack-update", {
             method: "POST",
@@ -559,7 +565,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      if (target.classList.contains("playlist-delete-button")) {
+      if (deleteBtn) {
         const confirmRemove = confirm("Remove this playlist from tracking?");
         if (!confirmRemove) {
           return;
