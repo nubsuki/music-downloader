@@ -14,9 +14,12 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
   - **Manual Creation**: Create custom playlists for existing songs via the UI modal.
 - **YouTube Playlist Tracking Tab**:
   - Track **YouTube playlist URLs** with optional custom names.
+  - Uses YouTube playlist IDs to prevent duplicates (even with different URLs).
   - Detects playlist changes using track IDs (added/removed/swapped songs), not only count.
+  - Displays original playlist title (source title) under custom name.
+  - Shows clickable YouTube playlist ID link to open the playlist in a new tab.
   - One-click resync with **Update** button and optional remove-from-tracking with optional `.m3u8` deletion.
-  - Includes manual **Refresh Updates** button and automatic periodic checks (every 3 days).
+  - Includes manual **Refresh Updates** button and automatic periodic checks (every 1 day).
 - **Filename Sanitization**: 
   - Automatically transliterates non-ASCII characters to fix compatibility issues with Docker/Windows mounts.
   - Configurable via `RESTRICT_FILENAMES`.
