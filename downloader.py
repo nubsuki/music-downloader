@@ -43,6 +43,7 @@ COOKIES_FILE_PATH = os.environ.get("DOWNLOADER_COOKIES_PATH") or None
 # Config file path
 CONFIG_DIR = os.environ.get("DOWNLOADER_CONFIG_DIR") or os.path.join(script_dir, "config")
 USE_DOWNLOAD_ARCHIVE = str(os.environ.get("USE_DOWNLOAD_ARCHIVE", "false")).lower() in ("1", "true", "yes", "on")
+ENABLE_SPOTIFY = str(os.environ.get("ENABLE_SPOTIFY", "true")).lower() in ("1", "true", "yes", "on")
 
 RESTRICT_FILENAMES = str(os.environ.get("RESTRICT_FILENAMES", "false")).lower() in ("1", "true", "yes", "on")
 PLAYLIST_RESTRICT_FILENAMES_ENV = os.environ.get("PLAYLIST_RESTRICT_FILENAMES")

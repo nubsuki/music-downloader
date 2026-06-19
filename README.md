@@ -56,6 +56,7 @@ services:
       - AUTO_PLAYLIST=false # Optional: if true, hides .m3u8 checkbox and auto-prompts playlist creation for playlist/album URLs
       - DOWNLOADER_COOKIES_PATH=/app/config/cookies.txt # Optional: for age-restricted content
       - DOWNLOADER_CONFIG_DIR=/app/config
+      - ENABLE_SPOTIFY=true # Optional: set to false to disable Spotify functionality entirely
       - SPOTIPY_CLIENT_ID=your_spotify_client_id
       - SPOTIPY_CLIENT_SECRET=your_spotify_client_secret
     volumes:
@@ -144,6 +145,7 @@ services:
 | `RESTRICT_FILENAMES` | `false` | If `true`, forces song filenames to ASCII (fixes Unicode issues on Docker/Windows). |
 | `AUTO_PLAYLIST` | `false` | If `true`, hides the `.m3u8` checkbox and automatically opens playlist creation for playlist/album URLs. |
 | `ENABLE_DELETE` | `false` | Enables delete buttons in the UI and delete API endpoints (downloaded files + tracked playlist remove). |
+| `ENABLE_SPOTIFY` | `true` | If `false`, disables all Spotify functionality completely. |
 | `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
 | `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |
 | `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive and configs are stored. |

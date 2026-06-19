@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.APP_CONFIG = {
     enableDelete: !!(cfgEl && cfgEl.dataset.enableDelete === "true"),
     autoPlaylist: !!(cfgEl && cfgEl.dataset.autoPlaylist === "true"),
+    enableSpotify: !!(cfgEl && cfgEl.dataset.enableSpotify === "true"),
   };
 
   // Modal elements
@@ -427,6 +428,21 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!url) {
       displayMessage("Please enter a URL.", "error");
       return;
+    }
+    
+    // Check if Spotify is disabled
+    if (!window.APP_CONFIG.enableSpotify) {
+      try {
+        const parsed = new URL(url);
+        const host = (parsed.hostname || "").toLowerCase();
+        const isSpotify = host === "spotify.com" || host.endsWith(".spotify.com") || parsed.protocol === "spotify:";
+        if (isSpotify) {
+          displayMessage("Spotify functionality is disabled.", "error");
+          return;
+        }
+      } catch {
+        // If URL is invalid
+      }
     }
 
     submitBtn.disabled = true;

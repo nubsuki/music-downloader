@@ -328,7 +328,7 @@ refresh_thread.start()
 @auth.login_required
 def index():
     """Serves the main HTML page."""
-    return render_template("index.html", enable_delete=ENABLE_DELETE, auto_playlist=AUTO_PLAYLIST)
+    return render_template("index.html", enable_delete=ENABLE_DELETE, auto_playlist=AUTO_PLAYLIST, enable_spotify=ENABLE_SPOTIFY)
 
 
 @app.route("/api/get-info")
@@ -339,6 +339,18 @@ def get_info():
     if not url:
         return jsonify({"success": False, "error": "URL is required."}), 400
     
+    # Check if Spotify is disabled
+    if not ENABLE_SPOTIFY:
+        parsed = urlparse(url)
+        hostname = parsed.hostname.lower() if parsed.hostname else ""
+        is_spotify = (
+            parsed.scheme == "spotify" or
+            hostname == "spotify.com" or
+            hostname.endswith(".spotify.com")
+        )
+        if is_spotify:
+            return jsonify({"success": False, "error": "Spotify functionality is disabled."}), 400
+    
     info = downloader.get_url_info(url, downloader.COOKIES_FILE_PATH)
     return jsonify(info)
 
@@ -346,7 +358,7 @@ def get_info():
 @app.route("/api/create-playlist", methods=["POST"])
 @auth.login_required
 def create_playlist():
-    """Creates an empty M3U8 file and queues tracks for download."""
+    """Creates an empty .m3u8 file and queues tracks for download."""
     data = request.get_json()
     url = data.get("url")
     name = data.get("name")
@@ -364,6 +376,10 @@ def create_playlist():
         hostname == "spotify.com" or
         hostname.endswith(".spotify.com")
     )
+    
+    if is_spotify and not ENABLE_SPOTIFY:
+        return jsonify({"success": False, "error": "Spotify functionality is disabled."}), 400
+    
     job_type = "spotify" if is_spotify else "youtube"
     
     # Save playlist in the same folder as the songs
@@ -647,7 +663,7 @@ def delete_tracked_playlist():
 def unified_download():
     """
     Unified endpoint to add a URL (YouTube or Spotify) to the queue.
-    Supports GET/POST with query param 'url', form data, or JSON body.
+    Supports GET/POST with query param "url", form data, or JSON body.
     """
     url = None
     create_m3u = False
@@ -670,6 +686,10 @@ def unified_download():
         hostname == "spotify.com" or
         hostname.endswith(".spotify.com")
     )
+    
+    if is_spotify and not ENABLE_SPOTIFY:
+        return jsonify({"success": False, "error": "Spotify functionality is disabled."}), 400
+    
     job_type = "spotify" if is_spotify else "youtube"
 
     with state.status_lock:
@@ -717,6 +737,7 @@ def logs():
 DOWNLOADS_DIR = "downloads"
 ENABLE_DELETE = os.environ.get("ENABLE_DELETE", "false").lower() == "true"
 AUTO_PLAYLIST = os.environ.get("AUTO_PLAYLIST", "false").lower() == "true"
+ENABLE_SPOTIFY = os.environ.get("ENABLE_SPOTIFY", "true").lower() == "true"
 
 @app.route("/api/downloaded_files")
 @auth.login_required

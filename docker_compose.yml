@@ -15,6 +15,7 @@ services:
       - RESTRICT_FILENAMES=true # Enforce ASCII filenames to fix VLC/Navidrome Unicode issues
       - PLAYLIST_RESTRICT_FILENAMES=false
       - AUTO_PLAYLIST=false # Optional: if true, hides .m3u8 checkbox and auto-prompts playlist creation for playlist/album URLs
+      - ENABLE_SPOTIFY=false # Optional: if true, enables Spotify download support
       - SPOTIPY_CLIENT_ID=your_spotify_client_id_here
       - SPOTIPY_CLIENT_SECRET=your_spotify_client_secret_here
     volumes:
