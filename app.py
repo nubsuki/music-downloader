@@ -8,6 +8,7 @@ import threading
 import time
 from urllib.parse import parse_qs, urlparse
 from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask_httpauth import HTTPBasicAuth
 from waitress import serve
 import downloader
 import state
@@ -75,6 +76,17 @@ sys.stderr = StreamCapture(sys.stderr)
 
 
 app = Flask(__name__)
+auth = HTTPBasicAuth()
+
+# Authentication configuration
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME")
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD")
+
+@auth.verify_password
+def verify_password(username, password):
+    if not AUTH_USERNAME or not AUTH_PASSWORD:
+        return True
+    return username == AUTH_USERNAME and password == AUTH_PASSWORD
 
 PLAYLIST_TRACKER_FILE = os.path.join(downloader.CONFIG_DIR, "tracked_playlists.json")
 playlist_tracker_lock = threading.Lock()
@@ -313,12 +325,14 @@ refresh_thread.start()
 
 
 @app.route("/")
+@auth.login_required
 def index():
     """Serves the main HTML page."""
     return render_template("index.html", enable_delete=ENABLE_DELETE, auto_playlist=AUTO_PLAYLIST)
 
 
 @app.route("/api/get-info")
+@auth.login_required
 def get_info():
     """Fetches suggested title and track info for a URL."""
     url = request.args.get("url")
@@ -330,6 +344,7 @@ def get_info():
 
 
 @app.route("/api/create-playlist", methods=["POST"])
+@auth.login_required
 def create_playlist():
     """Creates an empty M3U8 file and queues tracks for download."""
     data = request.get_json()
@@ -476,6 +491,7 @@ def create_playlist():
 
 
 @app.route("/api/tracked_playlists", methods=["GET", "POST"])
+@auth.login_required
 def tracked_playlists():
     if request.method == "GET":
         force = request.args.get("force", "false").lower() == "true"
@@ -559,6 +575,7 @@ def tracked_playlists():
 
 
 @app.route("/api/tracked_playlists/ack-update", methods=["POST"])
+@auth.login_required
 def ack_tracked_playlist_update():
     data = request.get_json(silent=True) or {}
     playlist_id = (data.get("id") or "").strip()
@@ -586,6 +603,7 @@ def ack_tracked_playlist_update():
 
 
 @app.route("/api/tracked_playlists/delete", methods=["POST"])
+@auth.login_required
 def delete_tracked_playlist():
     if not ENABLE_DELETE:
         return jsonify({"success": False, "error": "Delete functionality is disabled."}), 403
@@ -625,6 +643,7 @@ def delete_tracked_playlist():
 
 
 @app.route("/api/download", methods=["GET", "POST"])
+@auth.login_required
 def unified_download():
     """
     Unified endpoint to add a URL (YouTube or Spotify) to the queue.
@@ -662,6 +681,7 @@ def unified_download():
 
 
 @app.route("/api/status")
+@auth.login_required
 def status():
     """Returns a detailed list of all downloads and their statuses."""
     status_report = {
@@ -685,6 +705,7 @@ def status():
 
 
 @app.route("/api/logs")
+@auth.login_required
 def logs():
     after = request.args.get("after", default=0, type=int)
     with state.log_lock:
@@ -698,6 +719,7 @@ ENABLE_DELETE = os.environ.get("ENABLE_DELETE", "false").lower() == "true"
 AUTO_PLAYLIST = os.environ.get("AUTO_PLAYLIST", "false").lower() == "true"
 
 @app.route("/api/downloaded_files")
+@auth.login_required
 def downloaded_files():
     """Returns a list of MP3 files in the downloads directory with MP3 count information."""
     if not os.path.exists(DOWNLOADS_DIR):
@@ -725,6 +747,7 @@ def downloaded_files():
 
 
 @app.route("/api/delete_file", methods=["POST"])
+@auth.login_required
 def delete_file():
     """Deletes a file from the downloads directory."""
     if not ENABLE_DELETE:
@@ -753,6 +776,7 @@ def delete_file():
 
 
 @app.route("/downloads/<path:filename>")
+@auth.login_required
 def serve_downloaded_file(filename):
     """Serves a file from the downloads directory."""
     return send_from_directory(DOWNLOADS_DIR, filename)

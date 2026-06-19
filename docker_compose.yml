@@ -5,6 +5,8 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - AUTH_USERNAME= # Optional: username for basic auth (leave empty to disable)
+      - AUTH_PASSWORD= # Optional: password for basic auth (leave empty to disable)
       - ENABLE_DELETE=false # toggle delete UI and API
       - USE_DOWNLOAD_ARCHIVE=false # "false"- skips based on file existence | "true" - skips based on the archive.txt (deleting the file will not re-download unless its ID is removed from the archive.)
       - MAX_WORKERS=3

@@ -28,6 +28,7 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
 - **Docker Support**: Containerized deployment with Docker and Docker Compose.
 - **Delete Functionality**: Enable or disable delete UI and API endpoints for downloaded files.
 - **Download Archive**: Use an archive file to skip already downloaded files based on file existence.
+- **HTTP Basic Authentication**: Optional password protection to secure the web interface.
 
 ## Installation
 
@@ -45,6 +46,8 @@ services:
     ports:
       - "5000:5000"
     environment:
+      - AUTH_USERNAME= # Optional: username for basic auth (leave empty to disable)
+      - AUTH_PASSWORD= # Optional: password for basic auth (leave empty to disable)
       - ENABLE_DELETE=false # Toggle delete UI and API
       - USE_DOWNLOAD_ARCHIVE=false # "false": checks file existence | "true": uses archive.txt
       - MAX_WORKERS=3
@@ -135,6 +138,8 @@ services:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `AUTH_USERNAME` | - | Username for HTTP Basic Authentication (leave empty to disable). |
+| `AUTH_PASSWORD` | - | Password for HTTP Basic Authentication (leave empty to disable). |
 | `MAX_WORKERS` | `3` | Number of concurrent downloads. |
 | `RESTRICT_FILENAMES` | `false` | If `true`, forces song filenames to ASCII (fixes Unicode issues on Docker/Windows). |
 | `AUTO_PLAYLIST` | `false` | If `true`, hides the `.m3u8` checkbox and automatically opens playlist creation for playlist/album URLs. |
