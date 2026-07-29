@@ -408,6 +408,14 @@ document.addEventListener("DOMContentLoaded", () => {
         actions.appendChild(updateBtn);
       }
 
+      // Always-visible re-download button
+      const redownloadBtn = document.createElement("button");
+      redownloadBtn.className = "playlist-redownload-button";
+      redownloadBtn.dataset.playlistId = item.id;
+      redownloadBtn.title = "Re-download all tracks in this playlist";
+      redownloadBtn.textContent = "↻ Re-download";
+      actions.appendChild(redownloadBtn);
+
       if (window.APP_CONFIG && window.APP_CONFIG.enableDelete) {
         const deleteBtn = document.createElement("button");
         deleteBtn.className = "playlist-delete-button";
@@ -629,14 +637,19 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const updateBtn = target.closest(".playlist-update-button");
+      const redownloadBtn = target.closest(".playlist-redownload-button");
       const deleteBtn = target.closest(".playlist-delete-button");
-      const clickedButton = updateBtn || deleteBtn;
+      const clickedButton = updateBtn || redownloadBtn || deleteBtn;
       if (!clickedButton) return;
 
       const playlistId = clickedButton.dataset.playlistId;
       if (!playlistId) return;
 
-      if (updateBtn) {
+      if (updateBtn || redownloadBtn) {
+        const btn = updateBtn || redownloadBtn;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Queuing...";
         try {
           const response = await fetch("/api/tracked_playlists/ack-update", {
             method: "POST",
@@ -648,17 +661,20 @@ document.addEventListener("DOMContentLoaded", () => {
             throw new Error(
               data && data.error
                 ? data.error
-                : "Failed to update playlist tracking.",
+                : "Failed to re-download playlist.",
             );
           }
-          displayMessage(data.message || "Playlist resync started.");
+          displayMessage(data.message || "Re-download queued.");
           updateTrackedPlaylists();
         } catch (error) {
-          console.error("Error acknowledging playlist update:", error);
+          console.error("Error re-downloading playlist:", error);
           displayMessage(
-            error.message || "Failed to update playlist tracking.",
+            error.message || "Failed to re-download playlist.",
             "error",
           );
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
         }
         return;
       }

@@ -327,6 +327,27 @@ button:hover {
   background-color: #ffd670;
 }
 
+.playlist-redownload-button {
+  background-color: #1a3a4a;
+  color: #8fd8ce;
+  border: 1px solid #2d6a7a;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.playlist-redownload-button:hover {
+  background-color: #1f4d62;
+}
+
+.playlist-redownload-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
 .playlist-delete-button {
   background-color: #402126;
   color: #ffb3b3;
