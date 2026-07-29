@@ -1,4 +1,4 @@
-# Music Downloader ![GHCR Pulls](https://ghcr-badge.elias.eu.org/shield/nubsuki/music-downloader/music-downloader)
+﻿# Music Downloader ![GHCR Pulls](https://ghcr-badge.elias.eu.org/shield/nubsuki/music-downloader/music-downloader)
 
 A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
@@ -8,7 +8,7 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
 
 - **Web Interface**: Clean and simple web UI for adding and monitoring downloads.
 - **Unified Download**: Supports both **YouTube** and **Spotify** URLs via a single input.
-- **M3U8 Playlist Support**: 
+- **M3U8 Playlist Support**:
   - Automatically generates `.m3u8` playlists for YouTube and Spotify albums/playlists.
   - Supports **Unicode** (Japanese, Korean, etc.) correctly in Navidrome and VLC.
   - **Manual Creation**: Create custom playlists for existing songs via the UI modal.
@@ -18,9 +18,23 @@ A web-based music downloader application built with `yt-dlp` and `spotdl`.
   - Detects playlist changes using track IDs (added/removed/swapped songs), not only count.
   - Displays original playlist title (source title) under custom name.
   - Shows clickable YouTube playlist ID link to open the playlist in a new tab.
-  - One-click resync with **Update** button and optional remove-from-tracking with optional `.m3u8` deletion.
-  - Includes manual **Refresh Updates** button and automatic periodic checks (every 1 day).
-- **Filename Sanitization**: 
+  - One-click resync with **Update** button when changes are detected.
+  - **↻ Re-download** button on every tracked playlist to manually re-queue all tracks at any time.
+  - Optional remove-from-tracking with optional `.m3u8` deletion.
+  - Includes manual **Refresh All** button and automatic daily checks.
+- **Radio Stations Tab**:
+  - Add any YouTube Live channel or 24/7 stream as a radio station.
+  - Generates a **stable stream URL** (never expires) safe to paste into **Navidrome Internet Radio**.
+  - Uses `yt-dlp` to resolve a fresh audio-only stream URL on every connection — no stale links.
+  - Token-based URL authentication: no HTTP Basic Auth prompt in VLC, Navidrome, or any player.
+  - Copy-to-clipboard button for the stream URL.
+  - Stations persisted to `config/radio_stations.json`.
+- **Activity Log**:
+  - Terminal-style real-time log panel, polled every 1.5 seconds.
+  - Performance-optimised: first page load fetches only the last 200 lines (no UI freeze after long uptime).
+  - Incremental polling — only new lines are sent over the wire after the first fetch.
+  - Supports `?tail=N` and `?after=ID` query parameters on the `/api/logs` endpoint.
+- **Filename Sanitization**:
   - Automatically transliterates non-ASCII characters to fix compatibility issues with Docker/Windows mounts.
   - Configurable via `RESTRICT_FILENAMES`.
 - **Concurrent Downloads**: Multiple simultaneous downloads with configurable worker count.
@@ -71,12 +85,16 @@ services:
 2. Paste a **YouTube** or **Spotify** URL in the input field.
 3. Optional: Check the **.m3u8** box to generate a playlist file.
 4. Optional: Set `AUTO_PLAYLIST=true` to hide the checkbox and auto-prompt playlist creation for playlist/album URLs.
-5. Click "Add to Queue" to start downloading.
-6. Use the **Playlists** tab to track YouTube playlists and keep `.m3u8` files in sync.
-7. In **Playlists** tab:
-   - Click **Refresh Updates** for a manual check.
-   - Use **Update (+/-)** when changes are detected.
+5. Click **Download** to start downloading.
+6. Use the **Playlists** tab to track YouTube playlists and keep `.m3u8` files in sync:
+   - Click **Refresh All** for a manual check of all tracked playlists.
+   - Use **Update (+/-)** when changes are detected to resync new/removed tracks.
+   - Use **↻ Re-download** to re-queue all tracks in a playlist at any time.
    - Use the delete icon to remove tracking, with optional `.m3u8` removal.
+7. Use the **Radio** tab to stream YouTube Live channels as internet radio:
+   - Paste a YouTube Live URL and give the station a name, then click **Add Station**.
+   - Click **Copy URL** to copy the stable stream URL.
+   - Paste it into **Navidrome → Internet Radio** (no credentials required in the URL).
 
 ## API
 
@@ -94,12 +112,13 @@ services:
   ```
 
 ### Status & Logs
-- **Get Status**: `GET /api/status` - Returns status of all queued/active downloads.
-- **Get Logs**: `GET /api/logs?after=ID` - Returns real-time terminal output logs.
+- **Get Status**: `GET /api/status` — Returns status of all queued/active downloads.
+- **Get Logs**: `GET /api/logs?after=ID` — Returns real-time terminal output logs (incremental).
+  - `?tail=N` — Returns the last N log entries (used on first page load to avoid sending all history).
 
 ### File Management
-- **List Files**: `GET /api/downloaded_files` - Returns a list of all downloaded MP3s.
-- **Delete File**: `POST /api/delete_file` - Deletes a specific file (requires `ENABLE_DELETE=true`).
+- **List Files**: `GET /api/downloaded_files` — Returns a list of all downloaded MP3s.
+- **Delete File**: `POST /api/delete_file` — Deletes a specific file (requires `ENABLE_DELETE=true`).
   ```bash
   curl -X POST http://localhost:5000/api/delete_file \
        -H "Content-Type: application/json" \
@@ -107,7 +126,7 @@ services:
   ```
 
 ### Playlists
-- **Create Playlist**: `POST /api/create-playlist` - Creates a custom M3U8 for a URL.
+- **Create Playlist**: `POST /api/create-playlist` — Creates a custom M3U8 for a URL.
   ```bash
   curl -X POST http://localhost:5000/api/create-playlist \
        -H "Content-Type: application/json" \
@@ -115,25 +134,36 @@ services:
   ```
 
 - **Tracked Playlists (YouTube-only)**:
-  - `GET /api/tracked_playlists` - List tracked playlists and current change status.
-  - `POST /api/tracked_playlists` - Add/update tracked playlist and sync state.
+  - `GET /api/tracked_playlists` — List tracked playlists and current change status.
+  - `POST /api/tracked_playlists` — Add/update tracked playlist and sync state.
     ```bash
     curl -X POST http://localhost:5000/api/tracked_playlists \
          -H "Content-Type: application/json" \
          -d '{"url": "YOUTUBE_PLAYLIST_URL", "name": "My Custom Name"}'
     ```
-  - `POST /api/tracked_playlists/ack-update` - Force resync a tracked playlist.
+  - `POST /api/tracked_playlists/ack-update` — Force resync a tracked playlist (re-queues all tracks).
     ```bash
     curl -X POST http://localhost:5000/api/tracked_playlists/ack-update \
          -H "Content-Type: application/json" \
          -d '{"id": "pl-123"}'
     ```
-  - `POST /api/tracked_playlists/delete` - Remove tracking, optionally delete `.m3u8` file.
+  - `POST /api/tracked_playlists/delete` — Remove tracking, optionally delete `.m3u8` file.
     ```bash
     curl -X POST http://localhost:5000/api/tracked_playlists/delete \
          -H "Content-Type: application/json" \
          -d '{"id": "pl-123", "delete_m3u8": true}'
     ```
+
+### Radio Stations
+- **List Stations**: `GET /api/radio` — Returns all saved radio stations.
+- **Add Station**: `POST /api/radio` — Saves a new radio station.
+  ```bash
+  curl -X POST http://localhost:5000/api/radio \
+       -H "Content-Type: application/json" \
+       -d '{"url": "YOUTUBE_LIVE_URL", "name": "My Station"}'
+  ```
+- **Delete Station**: `DELETE /api/radio/<id>` — Removes a station by its ID.
+- **Stream**: `GET /api/radio/stream/<stream_token>` — Resolves a fresh audio-only URL via `yt-dlp` and issues a 302 redirect. **No authentication required** — the secret token in the URL acts as the credential. Safe to paste directly into Navidrome Internet Radio or VLC.
 
 ## Configuration
 
@@ -148,7 +178,7 @@ services:
 | `ENABLE_SPOTIFY` | `true` | If `false`, disables all Spotify functionality completely. |
 | `USE_DOWNLOAD_ARCHIVE` | `false` | Tracks downloaded IDs in `archive.txt` to prevent duplicates. |
 | `DOWNLOADER_COOKIES_PATH` | - | Path to `cookies.txt` for age-restricted content. |
-| `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive and configs are stored. |
+| `DOWNLOADER_CONFIG_DIR` | `/app/config` | Directory where the download archive, tracked playlists, and radio stations config are stored. |
 | `PLAYLIST_RESTRICT_FILENAMES` | `false` | If `true`, also restricts playlist `.m3u8` filenames to ASCII. Default `false` keeps Unicode playlist names. |
 | `SPOTIPY_CLIENT_ID` | - | Required for Spotify downloads. |
 | `SPOTIPY_CLIENT_SECRET` | - | Required for Spotify downloads. |
