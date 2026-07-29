@@ -52,7 +52,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (tabButtons.length > 0) {
     const activeButton = document.querySelector(".tab-button.active");
     setActiveTab(
-      activeButton ? activeButton.dataset.tabTarget : tabButtons[0].dataset.tabTarget
+      activeButton
+        ? activeButton.dataset.tabTarget
+        : tabButtons[0].dataset.tabTarget,
     );
   }
 
@@ -65,13 +67,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const parsed = new URL(rawUrl);
       const host = (parsed.hostname || "").toLowerCase();
 
-      const isSpotify = host === "spotify.com" || host.endsWith(".spotify.com") || parsed.protocol === "spotify:";
+      const isSpotify =
+        host === "spotify.com" ||
+        host.endsWith(".spotify.com") ||
+        parsed.protocol === "spotify:";
       if (isSpotify) {
         const p = parsed.pathname || "";
-        return p.includes("/playlist/") || p.includes("/album/") || rawUrl.includes(":playlist:") || rawUrl.includes(":album:");
+        return (
+          p.includes("/playlist/") ||
+          p.includes("/album/") ||
+          rawUrl.includes(":playlist:") ||
+          rawUrl.includes(":album:")
+        );
       }
 
-      const isYouTube = host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be";
+      const isYouTube =
+        host === "youtube.com" ||
+        host.endsWith(".youtube.com") ||
+        host === "youtu.be";
       if (isYouTube) {
         if ((parsed.pathname || "").startsWith("/playlist")) return true;
         return parsed.searchParams.has("list");
@@ -145,6 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastLogId = 0;
   const POLL_INTERVAL_LOGS_MS = 1500;
   const POLL_INTERVAL_FILES_MS = 5000;
+  const INITIAL_LOG_TAIL = 200; // only load last N lines on first page open
   let isFetchingLogs = false;
   let isUpdatingDownloaded = false;
   let isUpdatingTracked = false;
@@ -162,16 +176,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isLikelyNetworkError = (error) => {
     const message = error && error.message ? String(error.message) : "";
-    return error && (error.name === "AbortError" || error instanceof TypeError || message.includes("NetworkError") || message.includes("Failed to fetch"));
+    return (
+      error &&
+      (error.name === "AbortError" ||
+        error instanceof TypeError ||
+        message.includes("NetworkError") ||
+        message.includes("Failed to fetch"))
+    );
   };
 
-  const fetchJsonWithRetry = async (url, options = {}, retries = 1, timeoutMs = 12000) => {
+  const fetchJsonWithRetry = async (
+    url,
+    options = {},
+    retries = 1,
+    timeoutMs = 12000,
+  ) => {
     let lastError;
     for (let attempt = 0; attempt <= retries; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const response = await fetch(url, { ...options, signal: controller.signal, cache: "no-store" });
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+          cache: "no-store",
+        });
         clearTimeout(timer);
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}`);
@@ -183,19 +212,23 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isLikelyNetworkError(error) || attempt === retries) {
           throw error;
         }
-        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 300 * (attempt + 1)),
+        );
       }
     }
     throw lastError;
   };
 
-  const appendLogEntry = (entry) => {
-    if (!activityLog) return;
-    const line = entry && typeof entry.message === "string" ? entry.message : "";
+  const appendLogEntries = (entries) => {
+    if (!activityLog || !entries.length) return;
+    const lines = entries.map((e) =>
+      e && typeof e.message === "string" ? e.message : "",
+    );
     if (activityLog.textContent) {
-      activityLog.textContent += `\n${line}`;
+      activityLog.textContent += "\n" + lines.join("\n");
     } else {
-      activityLog.textContent = line;
+      activityLog.textContent = lines.join("\n");
     }
     activityLog.scrollTop = activityLog.scrollHeight;
   };
@@ -204,9 +237,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isFetchingLogs) return;
     isFetchingLogs = true;
     try {
-      const data = await fetchJsonWithRetry(`/api/logs?after=${lastLogId}`);
-      if (Array.isArray(data.entries)) {
-        data.entries.forEach(appendLogEntry);
+      const isFirstFetch = lastLogId === 0;
+      const url = isFirstFetch
+        ? `/api/logs?tail=${INITIAL_LOG_TAIL}`
+        : `/api/logs?after=${lastLogId}`;
+      const data = await fetchJsonWithRetry(url);
+      if (Array.isArray(data.entries) && data.entries.length > 0) {
+        appendLogEntries(data.entries);
       }
       if (typeof data.latest_id === "number") {
         lastLogId = data.latest_id;
@@ -248,7 +285,10 @@ document.addEventListener("DOMContentLoaded", () => {
       counterElement = document.createElement("div");
       counterElement.id = "mp3-counter";
       counterElement.className = "mp3-counter";
-      downloadedSection.insertBefore(counterElement, downloadedSection.firstChild.nextSibling);
+      downloadedSection.insertBefore(
+        counterElement,
+        downloadedSection.firstChild.nextSibling,
+      );
     }
     counterElement.textContent = `${count} MP3 file${count !== 1 ? "s" : ""} downloaded`;
   };
@@ -282,23 +322,23 @@ document.addEventListener("DOMContentLoaded", () => {
       sourceTitle.style.fontSize = "0.85em";
       sourceTitle.style.color = "#888";
       sourceTitle.style.fontStyle = "italic";
-      let sourceTitleText = '';
+      let sourceTitleText = "";
       if (item.source_title && item.source_title !== item.name) {
         sourceTitleText = `Source: ${item.source_title}`;
       } else if (item.source_title) {
         sourceTitleText = `Source: ${item.source_title}`;
       }
       if (item.youtube_playlist_id) {
-        const playlistLink = document.createElement('a');
+        const playlistLink = document.createElement("a");
         playlistLink.href = `https://www.youtube.com/playlist?list=${item.youtube_playlist_id}`;
-        playlistLink.target = '_blank';
-        playlistLink.rel = 'noopener noreferrer';
+        playlistLink.target = "_blank";
+        playlistLink.rel = "noopener noreferrer";
         playlistLink.textContent = item.youtube_playlist_id;
-        playlistLink.style.color = '#007bff';
-        playlistLink.style.textDecoration = 'none';
-        playlistLink.style.borderBottom = '1px dotted #007bff';
+        playlistLink.style.color = "#007bff";
+        playlistLink.style.textDecoration = "none";
+        playlistLink.style.borderBottom = "1px dotted #007bff";
         if (sourceTitleText) {
-          sourceTitle.textContent = sourceTitleText + ' • ';
+          sourceTitle.textContent = sourceTitleText + " • ";
           sourceTitle.appendChild(playlistLink);
         } else {
           sourceTitle.appendChild(playlistLink);
@@ -374,7 +414,7 @@ document.addEventListener("DOMContentLoaded", () => {
         deleteBtn.dataset.playlistId = item.id;
         deleteBtn.title = "Remove playlist tracking";
         deleteBtn.setAttribute("aria-label", "Remove playlist tracking");
-        deleteBtn.innerHTML = "<i class=\"bi bi-trash3\"></i>";
+        deleteBtn.innerHTML = '<i class="bi bi-trash3"></i>';
         actions.appendChild(deleteBtn);
       }
 
@@ -388,14 +428,20 @@ document.addEventListener("DOMContentLoaded", () => {
     isUpdatingTracked = true;
     const { notify = false, force = false } = options;
     try {
-      const url = force ? "/api/tracked_playlists?force=true" : "/api/tracked_playlists";
+      const url = force
+        ? "/api/tracked_playlists?force=true"
+        : "/api/tracked_playlists";
       const data = await fetchJsonWithRetry(url, {}, 1, 20000);
       renderTrackedPlaylists(data.playlists || []);
       if (typeof applyPlaylistFilter === "function") {
         applyPlaylistFilter();
       }
       if (notify) {
-        displayMessage(force ? "Playlists refreshed successfully!" : "Playlist updates checked.");
+        displayMessage(
+          force
+            ? "Playlists refreshed successfully!"
+            : "Playlist updates checked.",
+        );
       }
       return true;
     } catch (error) {
@@ -429,13 +475,16 @@ document.addEventListener("DOMContentLoaded", () => {
       displayMessage("Please enter a URL.", "error");
       return;
     }
-    
+
     // Check if Spotify is disabled
     if (!window.APP_CONFIG.enableSpotify) {
       try {
         const parsed = new URL(url);
         const host = (parsed.hostname || "").toLowerCase();
-        const isSpotify = host === "spotify.com" || host.endsWith(".spotify.com") || parsed.protocol === "spotify:";
+        const isSpotify =
+          host === "spotify.com" ||
+          host.endsWith(".spotify.com") ||
+          parsed.protocol === "spotify:";
         if (isSpotify) {
           displayMessage("Spotify functionality is disabled.", "error");
           return;
@@ -450,9 +499,14 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Fetching info...";
 
     try {
-      const manualCreateM3u = !!(createM3uCheckbox && createM3uCheckbox.checked);
-      const autoPlaylistEnabled = !!(window.APP_CONFIG && window.APP_CONFIG.autoPlaylist);
-      const shouldCreatePlaylist = manualCreateM3u || (autoPlaylistEnabled && isPlaylistUrl(url));
+      const manualCreateM3u = !!(
+        createM3uCheckbox && createM3uCheckbox.checked
+      );
+      const autoPlaylistEnabled = !!(
+        window.APP_CONFIG && window.APP_CONFIG.autoPlaylist
+      );
+      const shouldCreatePlaylist =
+        manualCreateM3u || (autoPlaylistEnabled && isPlaylistUrl(url));
 
       if (!shouldCreatePlaylist) {
         const response = await fetch("/api/download", {
@@ -462,7 +516,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data && data.error ? data.error : "Failed to queue download.");
+          throw new Error(
+            data && data.error ? data.error : "Failed to queue download.",
+          );
         }
         displayMessage(data.message || "URL added to queue.");
         urlInput.value = "";
@@ -470,7 +526,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const infoResponse = await fetch(`/api/get-info?url=${encodeURIComponent(url)}`);
+      const infoResponse = await fetch(
+        `/api/get-info?url=${encodeURIComponent(url)}`,
+      );
       if (!infoResponse.ok) throw new Error("Failed to fetch URL info");
 
       const info = await infoResponse.json();
@@ -478,9 +536,15 @@ document.addEventListener("DOMContentLoaded", () => {
       pendingUrl = url;
       modalInput.value = info.title || "Playlist";
       // Show track playlist checkbox, hide auto-refresh checkbox when opening modal for download-playlist
-      const trackPlaylistLabel = document.getElementById("track-playlist-modal-label");
-      const trackPlaylistCheckbox = document.getElementById("track-playlist-modal-checkbox");
-      const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      const trackPlaylistLabel = document.getElementById(
+        "track-playlist-modal-label",
+      );
+      const trackPlaylistCheckbox = document.getElementById(
+        "track-playlist-modal-checkbox",
+      );
+      const autoRefreshLabel = document.getElementById(
+        "auto-refresh-modal-label",
+      );
       if (trackPlaylistLabel) trackPlaylistLabel.style.display = "flex";
       if (trackPlaylistCheckbox) trackPlaylistCheckbox.checked = false;
       if (autoRefreshLabel) autoRefreshLabel.style.display = "none";
@@ -489,7 +553,10 @@ document.addEventListener("DOMContentLoaded", () => {
       modalInput.select();
     } catch (error) {
       console.error("Error submitting URL:", error);
-      displayMessage(error.message || "Request failed. Please try again.", "error");
+      displayMessage(
+        error.message || "Request failed. Please try again.",
+        "error",
+      );
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = originalBtnText;
@@ -507,7 +574,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let suggestedName = "Playlist";
       try {
-        const infoResponse = await fetch(`/api/get-info?url=${encodeURIComponent(url)}`);
+        const infoResponse = await fetch(
+          `/api/get-info?url=${encodeURIComponent(url)}`,
+        );
         if (infoResponse.ok) {
           const info = await infoResponse.json();
           suggestedName = info.title || suggestedName;
@@ -520,9 +589,15 @@ document.addEventListener("DOMContentLoaded", () => {
       pendingTrackUrl = url;
       modalInput.value = suggestedName;
       // Hide track playlist checkbox, reset auto-refresh checkbox when opening modal for track-playlist
-      const trackPlaylistLabel = document.getElementById("track-playlist-modal-label");
-      const autoRefreshCheckbox = document.getElementById("auto-refresh-modal-checkbox");
-      const autoRefreshLabel = document.getElementById("auto-refresh-modal-label");
+      const trackPlaylistLabel = document.getElementById(
+        "track-playlist-modal-label",
+      );
+      const autoRefreshCheckbox = document.getElementById(
+        "auto-refresh-modal-checkbox",
+      );
+      const autoRefreshLabel = document.getElementById(
+        "auto-refresh-modal-label",
+      );
       if (trackPlaylistLabel) trackPlaylistLabel.style.display = "none";
       if (autoRefreshCheckbox) autoRefreshCheckbox.checked = false;
       if (autoRefreshLabel) autoRefreshLabel.style.display = "flex";
@@ -553,8 +628,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const updateBtn = target.closest('.playlist-update-button');
-      const deleteBtn = target.closest('.playlist-delete-button');
+      const updateBtn = target.closest(".playlist-update-button");
+      const deleteBtn = target.closest(".playlist-delete-button");
       const clickedButton = updateBtn || deleteBtn;
       if (!clickedButton) return;
 
@@ -570,13 +645,20 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           const data = await response.json();
           if (!response.ok) {
-            throw new Error(data && data.error ? data.error : "Failed to update playlist tracking.");
+            throw new Error(
+              data && data.error
+                ? data.error
+                : "Failed to update playlist tracking.",
+            );
           }
           displayMessage(data.message || "Playlist resync started.");
           updateTrackedPlaylists();
         } catch (error) {
           console.error("Error acknowledging playlist update:", error);
-          displayMessage(error.message || "Failed to update playlist tracking.", "error");
+          displayMessage(
+            error.message || "Failed to update playlist tracking.",
+            "error",
+          );
         }
         return;
       }
@@ -587,7 +669,9 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        const removeM3u8 = confirm("Also remove the playlist .m3u8 file from disk?\n\nPress OK to remove .m3u8, or Cancel to keep it.");
+        const removeM3u8 = confirm(
+          "Also remove the playlist .m3u8 file from disk?\n\nPress OK to remove .m3u8, or Cancel to keep it.",
+        );
 
         try {
           const response = await fetch("/api/tracked_playlists/delete", {
@@ -597,13 +681,20 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           const data = await response.json();
           if (!response.ok) {
-            throw new Error(data && data.error ? data.error : "Failed to remove tracked playlist.");
+            throw new Error(
+              data && data.error
+                ? data.error
+                : "Failed to remove tracked playlist.",
+            );
           }
           displayMessage(data.message || "Playlist removed from tracking.");
           updateTrackedPlaylists();
         } catch (error) {
           console.error("Error deleting tracked playlist:", error);
-          displayMessage(error.message || "Failed to remove tracked playlist.", "error");
+          displayMessage(
+            error.message || "Failed to remove tracked playlist.",
+            "error",
+          );
         }
       }
     });
@@ -611,7 +702,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Handle auto-refresh checkbox changes
     playlistTrackedList.addEventListener("change", async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLInputElement) || !target.classList.contains("auto-refresh-checkbox")) {
+      if (
+        !(target instanceof HTMLInputElement) ||
+        !target.classList.contains("auto-refresh-checkbox")
+      ) {
         return;
       }
 
@@ -626,12 +720,23 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data && data.error ? data.error : "Failed to update auto-refresh setting.");
+          throw new Error(
+            data && data.error
+              ? data.error
+              : "Failed to update auto-refresh setting.",
+          );
         }
-        displayMessage(isChecked ? "Auto-refresh enabled for this playlist." : "Auto-refresh disabled for this playlist.");
+        displayMessage(
+          isChecked
+            ? "Auto-refresh enabled for this playlist."
+            : "Auto-refresh disabled for this playlist.",
+        );
       } catch (error) {
         console.error("Error updating auto-refresh:", error);
-        displayMessage(error.message || "Failed to update auto-refresh setting.", "error");
+        displayMessage(
+          error.message || "Failed to update auto-refresh setting.",
+          "error",
+        );
         // Revert checkbox state on error
         target.checked = !isChecked;
       }
@@ -657,19 +762,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (modalAction === "track-playlist") {
       try {
-        const autoRefreshCheckbox = document.getElementById("auto-refresh-modal-checkbox");
-        const autoRefresh = autoRefreshCheckbox ? autoRefreshCheckbox.checked : false;
+        const autoRefreshCheckbox = document.getElementById(
+          "auto-refresh-modal-checkbox",
+        );
+        const autoRefresh = autoRefreshCheckbox
+          ? autoRefreshCheckbox.checked
+          : false;
         const response = await fetch("/api/tracked_playlists", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: pendingTrackUrl, name: playlistName, auto_refresh: autoRefresh }),
+          body: JSON.stringify({
+            url: pendingTrackUrl,
+            name: playlistName,
+            auto_refresh: autoRefresh,
+          }),
         });
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data && data.error ? data.error : "Failed to track playlist.");
+          throw new Error(
+            data && data.error ? data.error : "Failed to track playlist.",
+          );
         }
         playlistTrackInput.value = "";
-        displayMessage(data.message || (data.exists ? "Playlist is already tracked." : "Playlist added to tracking."));
+        displayMessage(
+          data.message ||
+            (data.exists
+              ? "Playlist is already tracked."
+              : "Playlist added to tracking."),
+        );
         updateTrackedPlaylists();
       } catch (error) {
         console.error("Error tracking playlist:", error);
@@ -696,20 +816,33 @@ document.addEventListener("DOMContentLoaded", () => {
         return { resp, data };
       };
 
-      const trackPlaylistCheckbox = document.getElementById("track-playlist-modal-checkbox");
-      const trackPlaylist = trackPlaylistCheckbox ? trackPlaylistCheckbox.checked : false;
+      const trackPlaylistCheckbox = document.getElementById(
+        "track-playlist-modal-checkbox",
+      );
+      const trackPlaylist = trackPlaylistCheckbox
+        ? trackPlaylistCheckbox.checked
+        : false;
 
-      let payload = { url: pendingUrl, name: playlistName, overwrite: false, track_playlist: trackPlaylist };
+      let payload = {
+        url: pendingUrl,
+        name: playlistName,
+        overwrite: false,
+        track_playlist: trackPlaylist,
+      };
       let { resp, data } = await makeRequest(payload);
 
       if (resp.status === 409 && data && data.exists_as_tracked) {
-        alert(`This playlist is already tracked as "${data.existing_tracked_playlist?.name || 'a playlist'}". Please use the existing tracked playlist.`);
+        alert(
+          `This playlist is already tracked as "${data.existing_tracked_playlist?.name || "a playlist"}". Please use the existing tracked playlist.`,
+        );
         return;
       }
 
       if (resp.status === 409 && data && data.exists) {
         const suggested = data.suggested_name || `${playlistName} (1)`;
-        const confirmOverwrite = confirm(`Playlist "${playlistName}" already exists.\n\nPress OK to overwrite the existing file, or Cancel to create a new one named "${suggested}".`);
+        const confirmOverwrite = confirm(
+          `Playlist "${playlistName}" already exists.\n\nPress OK to overwrite the existing file, or Cancel to create a new one named "${suggested}".`,
+        );
         if (confirmOverwrite) {
           payload.overwrite = true;
           ({ resp, data } = await makeRequest(payload));
@@ -721,10 +854,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (!resp.ok) {
-        throw new Error(data && data.error ? data.error : "Failed to create playlist.");
+        throw new Error(
+          data && data.error ? data.error : "Failed to create playlist.",
+        );
       }
 
-      displayMessage(data.message || `Playlist '${data.playlist_id}' created! ${data.track_count} tracks queued.`);
+      displayMessage(
+        data.message ||
+          `Playlist '${data.playlist_id}' created! ${data.track_count} tracks queued.`,
+      );
       urlInput.value = "";
       fetchLogs();
       updateDownloadedFiles();
@@ -751,11 +889,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Event listener for the downloaded files search bar
   const downloadedSearchInput = document.getElementById(
-    "downloaded-search-input"
+    "downloaded-search-input",
   );
-  const playlistSearchInput = document.getElementById(
-    "playlist-search-input"
-  );
+  const playlistSearchInput = document.getElementById("playlist-search-input");
   const normalizeForSearch = (str) => {
     return (str || "")
       .normalize("NFKD")
@@ -802,7 +938,7 @@ document.addEventListener("DOMContentLoaded", () => {
       audioPlayer.play();
       nowPlaying.textContent = `Now Playing: ${filename}`;
     }
-    
+
     if (event.target.classList.contains("delete-button")) {
       if (!(window.APP_CONFIG && window.APP_CONFIG.enableDelete)) {
         return;
@@ -839,10 +975,184 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Radio Stations
+
+  const radioStationList = document.getElementById("radio-station-list");
+  const radioAddForm = document.getElementById("radio-add-form");
+  const radioUrlInput = document.getElementById("radio-url-input");
+  const radioNameInput = document.getElementById("radio-name-input");
+  const radioAddBtn = document.getElementById("radio-add-btn");
+
+  const getStableStreamUrl = (station) => {
+    return `${window.location.origin}/api/radio/stream/${station.stream_token}`;
+  };
+
+  const renderRadioStations = (stations) => {
+    if (!radioStationList) return;
+    radioStationList.innerHTML = "";
+    if (!Array.isArray(stations) || stations.length === 0) {
+      radioStationList.innerHTML = "<li>No radio stations added yet.</li>";
+      return;
+    }
+    stations.forEach((station) => {
+      const li = document.createElement("li");
+      li.className = "radio-station-item";
+      li.dataset.stationId = station.id;
+
+      const header = document.createElement("div");
+      header.className = "radio-station-header";
+
+      const name = document.createElement("span");
+      name.className = "radio-station-name";
+      name.textContent = station.name;
+
+      const actions = document.createElement("div");
+      actions.className = "radio-station-actions";
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "radio-delete-btn";
+      deleteBtn.title = "Remove station";
+      deleteBtn.setAttribute("aria-label", "Remove station");
+      deleteBtn.innerHTML = '<i class="bi bi-trash3"></i>';
+      deleteBtn.dataset.stationId = station.id;
+      actions.appendChild(deleteBtn);
+
+      header.appendChild(name);
+      header.appendChild(actions);
+
+      // Stream URL row
+      const streamRow = document.createElement("div");
+      streamRow.className = "radio-stream-row";
+
+      const streamUrl = getStableStreamUrl(station);
+      const urlSpan = document.createElement("span");
+      urlSpan.className = "radio-stream-url";
+      urlSpan.textContent = streamUrl;
+      urlSpan.title = streamUrl;
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "radio-copy-btn";
+      copyBtn.textContent = "Copy URL";
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard
+          .writeText(streamUrl)
+          .then(() => {
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => {
+              copyBtn.textContent = "Copy URL";
+            }, 2000);
+          })
+          .catch(() => {
+            // Fallback for non-secure context
+            const ta = document.createElement("textarea");
+            ta.value = streamUrl;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            copyBtn.textContent = "Copied!";
+            setTimeout(() => {
+              copyBtn.textContent = "Copy URL";
+            }, 2000);
+          });
+      });
+
+      streamRow.appendChild(urlSpan);
+      streamRow.appendChild(copyBtn);
+
+      li.appendChild(header);
+      li.appendChild(streamRow);
+      radioStationList.appendChild(li);
+    });
+  };
+
+  const loadRadioStations = async () => {
+    try {
+      const data = await fetchJsonWithRetry("/api/radio");
+      renderRadioStations(data.stations || []);
+    } catch (error) {
+      if (shouldLogNetworkError("radio") || !isLikelyNetworkError(error)) {
+        console.error("Error loading radio stations:", error);
+      }
+    }
+  };
+
+  if (radioAddForm) {
+    radioAddForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const url = (radioUrlInput.value || "").trim();
+      const name = (radioNameInput.value || "").trim();
+      if (!url) {
+        displayMessage("Please enter a YouTube Live URL.", "error");
+        return;
+      }
+      if (radioAddBtn) {
+        radioAddBtn.disabled = true;
+        radioAddBtn.textContent = "Adding...";
+      }
+      try {
+        const response = await fetch("/api/radio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, name: name || "Radio Station" }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data && data.error ? data.error : "Failed to add station.",
+          );
+        }
+        radioUrlInput.value = "";
+        radioNameInput.value = "";
+        displayMessage(
+          `Station "${data.station.name}" added! Copy the Stream URL to use in Navidrome.`,
+        );
+        loadRadioStations();
+      } catch (error) {
+        console.error("Error adding radio station:", error);
+        displayMessage(error.message || "Failed to add station.", "error");
+      } finally {
+        if (radioAddBtn) {
+          radioAddBtn.disabled = false;
+          radioAddBtn.textContent = "Add Station";
+        }
+      }
+    });
+  }
+
+  if (radioStationList) {
+    radioStationList.addEventListener("click", async (event) => {
+      const deleteBtn = event.target.closest(".radio-delete-btn");
+      if (!deleteBtn) return;
+      const stationId = deleteBtn.dataset.stationId;
+      if (!stationId) return;
+      if (!confirm("Remove this radio station?")) return;
+      try {
+        const response = await fetch(`/api/radio/${stationId}`, {
+          method: "DELETE",
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data && data.error ? data.error : "Failed to remove station.",
+          );
+        }
+        displayMessage("Station removed.");
+        loadRadioStations();
+      } catch (error) {
+        console.error("Error deleting radio station:", error);
+        displayMessage(error.message || "Failed to remove station.", "error");
+      }
+    });
+  }
+
   // Initial and periodic status updates
   fetchLogs();
   updateDownloadedFiles();
   updateTrackedPlaylists();
+  loadRadioStations();
   setInterval(fetchLogs, POLL_INTERVAL_LOGS_MS);
   setInterval(updateDownloadedFiles, POLL_INTERVAL_FILES_MS);
 
@@ -850,5 +1160,6 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchLogs();
     updateDownloadedFiles();
     updateTrackedPlaylists();
+    loadRadioStations();
   });
 });

@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import re
+import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -728,8 +730,12 @@ def status():
 @auth.login_required
 def logs():
     after = request.args.get("after", default=0, type=int)
+    tail = request.args.get("tail", default=0, type=int)
     with state.log_lock:
-        entries = [entry for entry in state.log_entries if entry["id"] > after]
+        if tail > 0:
+            entries = state.log_entries[-tail:]
+        else:
+            entries = [entry for entry in state.log_entries if entry["id"] > after]
         latest_id = state.log_entries[-1]["id"] if state.log_entries else after
     return jsonify({"entries": entries, "latest_id": latest_id})
 
@@ -738,6 +744,120 @@ DOWNLOADS_DIR = "downloads"
 ENABLE_DELETE = os.environ.get("ENABLE_DELETE", "false").lower() == "true"
 AUTO_PLAYLIST = os.environ.get("AUTO_PLAYLIST", "false").lower() == "true"
 ENABLE_SPOTIFY = os.environ.get("ENABLE_SPOTIFY", "true").lower() == "true"
+
+
+# Radio Stations
+
+RADIO_STATIONS_FILE = os.path.join(downloader.CONFIG_DIR, "radio_stations.json")
+radio_stations_lock = threading.Lock()
+
+
+def _load_radio_stations():
+    if not os.path.exists(RADIO_STATIONS_FILE):
+        return []
+    try:
+        with open(RADIO_STATIONS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_radio_stations(stations):
+    os.makedirs(downloader.CONFIG_DIR, exist_ok=True)
+    with open(RADIO_STATIONS_FILE, "w", encoding="utf-8") as f:
+        json.dump(stations, f, ensure_ascii=False, indent=2)
+
+
+def _get_live_stream_url(youtube_url, cookies_file=None):
+    """Run yt-dlp -g -f bestaudio and return the direct stream URL."""
+    cmd = ["yt-dlp", "-g", "-f", "bestaudio/best", "--no-playlist"]
+    if cookies_file:
+        cmd.extend(["--cookies", cookies_file])
+    cmd.append(youtube_url)
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logging.error("yt-dlp -g failed: %s", result.stderr.strip())
+            return None
+        url = result.stdout.strip().splitlines()[0].strip()
+        return url if url else None
+    except Exception:
+        logging.error("yt-dlp -g exception", exc_info=True)
+        return None
+
+
+@app.route("/api/radio", methods=["GET"])
+@auth.login_required
+def get_radio_stations():
+    with radio_stations_lock:
+        stations = _load_radio_stations()
+    return jsonify({"stations": stations})
+
+
+@app.route("/api/radio", methods=["POST"])
+@auth.login_required
+def add_radio_station():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    name = (data.get("name") or "").strip()
+    if not url:
+        return jsonify({"success": False, "error": "URL is required."}), 400
+    if not name:
+        name = "Radio Station"
+    station_id = f"rs-{int(time.time() * 1000)}"
+    station = {
+        "id": station_id,
+        "name": name,
+        "url": url,
+        "stream_token": secrets.token_hex(16),  # used in stream URL — no auth needed
+        "created_at": int(time.time()),
+    }
+    with radio_stations_lock:
+        stations = _load_radio_stations()
+        stations.append(station)
+        _save_radio_stations(stations)
+    return jsonify({"success": True, "station": station})
+
+
+@app.route("/api/radio/<station_id>", methods=["DELETE"])
+@auth.login_required
+def delete_radio_station(station_id):
+    with radio_stations_lock:
+        stations = _load_radio_stations()
+        idx = next((i for i, s in enumerate(stations) if s.get("id") == station_id), None)
+        if idx is None:
+            return jsonify({"success": False, "error": "Station not found."}), 404
+        removed = stations.pop(idx)
+        _save_radio_stations(stations)
+    return jsonify({"success": True, "station": removed})
+
+
+@app.route("/api/radio/stream/<stream_token>")
+def stream_radio_station(stream_token):
+    """Fetch a fresh yt-dlp direct stream URL and redirect to it.
+    Authentication is done via the secret stream_token in the URL, so no
+    HTTP Basic Auth prompt appears — safe to add directly to Navidrome or VLC.
+    """
+    with radio_stations_lock:
+        stations = _load_radio_stations()
+        station = next((s for s in stations if s.get("stream_token") == stream_token), None)
+    if not station:
+        return jsonify({"error": "Station not found."}), 404
+
+    stream_url = _get_live_stream_url(station["url"], downloader.COOKIES_FILE_PATH)
+    if not stream_url:
+        return jsonify({"error": "Could not resolve stream URL. The channel may be offline or the URL is invalid."}), 502
+
+    from flask import redirect
+    return redirect(stream_url, code=302)
 
 @app.route("/api/downloaded_files")
 @auth.login_required

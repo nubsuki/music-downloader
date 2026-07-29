@@ -519,3 +519,102 @@ button:hover {
   gap: 6px;
   cursor: pointer;
 }
+
+/*Radio Stations*/
+
+.radio-hint {
+  font-size: 0.88rem;
+  color: #8fd8ce;
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.radio-add-form {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.radio-add-form input {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+
+.radio-station-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+}
+
+.radio-station-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.radio-station-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.radio-station-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.radio-stream-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--item-bg-color);
+  border: 1px solid var(--section-border-color);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  box-sizing: border-box;
+}
+
+.radio-stream-url {
+  flex: 1;
+  font-size: 0.78rem;
+  color: #8fd8ce;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.radio-copy-btn {
+  flex-shrink: 0;
+  background-color: #1f4e6b;
+  color: #a8d8ea;
+  border: 1px solid #2d7aab;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.radio-copy-btn:hover {
+  background-color: #2d6a94;
+}
+
+.radio-delete-btn {
+  background-color: #402126;
+  color: #ffb3b3;
+  border: 1px solid #8a3e4a;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.radio-delete-btn:hover {
+  background-color: #5d2a33;
+}
+

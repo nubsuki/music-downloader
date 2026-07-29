@@ -72,6 +72,18 @@
           >
             Playlists
           </button>
+          <button
+            type="button"
+            class="tab-button"
+            role="tab"
+            id="tab-radio"
+            aria-controls="radio-section"
+            aria-selected="false"
+            tabindex="-1"
+            data-tab-target="radio-section"
+          >
+            Radio
+          </button>
         </div>
 
         <section id="activity-log-section" class="status-section tab-panel active" aria-labelledby="tab-activity">
@@ -105,6 +117,29 @@
             <button type="button" id="playlist-refresh-btn" class="secondary-button" title="Check all tracked playlists for new or removed songs">Refresh All</button>
           </form>
           <ul id="playlist-tracked-list"></ul>
+        </section>
+        <section id="radio-section" class="status-section tab-panel" aria-labelledby="tab-radio" hidden>
+          <h2>Radio Stations</h2>
+          <p class="radio-hint">
+            Add a YouTube Live channel or 24/7 stream. Copy the <strong>Stream URL</strong> and paste it into
+            Navidrome → <em>Internet Radio</em>.
+          </p>
+          <form id="radio-add-form" class="inline-form radio-add-form">
+            <input
+              type="text"
+              id="radio-url-input"
+              placeholder="YouTube Live URL"
+              required
+            />
+            <input
+              type="text"
+              id="radio-name-input"
+              placeholder="Station name"
+              required
+            />
+            <button type="submit" id="radio-add-btn">Add Station</button>
+          </form>
+          <ul id="radio-station-list"></ul>
         </section>
       </div>
     </div>
