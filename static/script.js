@@ -1049,30 +1049,43 @@ document.addEventListener("DOMContentLoaded", () => {
       const copyBtn = document.createElement("button");
       copyBtn.className = "radio-copy-btn";
       copyBtn.textContent = "Copy URL";
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard
-          .writeText(streamUrl)
-          .then(() => {
-            copyBtn.textContent = "Copied!";
-            setTimeout(() => {
-              copyBtn.textContent = "Copy URL";
-            }, 2000);
-          })
-          .catch(() => {
-            // Fallback for non-secure context
-            const ta = document.createElement("textarea");
-            ta.value = streamUrl;
-            ta.style.position = "fixed";
-            ta.style.opacity = "0";
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
-            copyBtn.textContent = "Copied!";
-            setTimeout(() => {
-              copyBtn.textContent = "Copy URL";
-            }, 2000);
-          });
+      const copyToClipboard = async (text) => {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch (e) {
+            // fallback
+          }
+        }
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.top = "0";
+          ta.style.left = "0";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          return ok;
+        } catch (e) {
+          return false;
+        }
+      };
+
+      copyBtn.addEventListener("click", async () => {
+        const ok = await copyToClipboard(streamUrl);
+        if (ok) {
+          copyBtn.textContent = "Copied!";
+          setTimeout(() => {
+            copyBtn.textContent = "Copy URL";
+          }, 2000);
+        } else {
+          displayMessage("Could not copy URL automatically. Please copy it manually.", "error");
+        }
       });
 
       streamRow.appendChild(urlSpan);
