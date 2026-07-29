@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory, Response, stream_with_context
 from flask_httpauth import HTTPBasicAuth
 from waitress import serve
 import downloader
@@ -840,11 +840,57 @@ def delete_radio_station(station_id):
     return jsonify({"success": True, "station": removed})
 
 
+def _stream_audio_with_ffmpeg(youtube_url):
+    stream_url = _get_live_stream_url(youtube_url, downloader.COOKIES_FILE_PATH)
+    if not stream_url:
+        return None
+
+    cmd = [
+        "ffmpeg",
+        "-reconnect", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "5",
+        "-i", stream_url,
+        "-vn",
+        "-c:a", "libmp3lame",
+        "-b:a", "128k",
+        "-f", "mp3",
+        "pipe:1"
+    ]
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=1024 * 64,
+        )
+    except Exception:
+        logging.error("Failed to start ffmpeg process for streaming", exc_info=True)
+        return None
+
+    def generate():
+        try:
+            while True:
+                chunk = proc.stdout.read(8192)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except Exception:
+                proc.kill()
+
+    return generate()
+
+
 @app.route("/api/radio/stream/<stream_token>")
 def stream_radio_station(stream_token):
-    """Fetch a fresh yt-dlp direct stream URL and redirect to it.
-    Authentication is done via the secret stream_token in the URL, so no
-    HTTP Basic Auth prompt appears — safe to add directly to Navidrome or VLC.
+    """Streams the audio from a YouTube Live channel using ffmpeg transcoding to MP3.
+    This strips video (-vn) and outputs a pure audio/mpeg stream suitable for
+    Navidrome Internet Radio, VLC, or any standard audio player.
     """
     with radio_stations_lock:
         stations = _load_radio_stations()
@@ -852,12 +898,18 @@ def stream_radio_station(stream_token):
     if not station:
         return jsonify({"error": "Station not found."}), 404
 
-    stream_url = _get_live_stream_url(station["url"], downloader.COOKIES_FILE_PATH)
-    if not stream_url:
-        return jsonify({"error": "Could not resolve stream URL. The channel may be offline or the URL is invalid."}), 502
+    audio_generator = _stream_audio_with_ffmpeg(station["url"])
+    if not audio_generator:
+        return jsonify({"error": "Could not resolve stream URL or start audio transcoder. Channel may be offline."}), 502
 
-    from flask import redirect
-    return redirect(stream_url, code=302)
+    response = Response(
+        stream_with_context(audio_generator),
+        mimetype="audio/mpeg"
+    )
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.route("/api/downloaded_files")
 @auth.login_required
