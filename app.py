@@ -93,6 +93,10 @@ def verify_password(username, password):
 PLAYLIST_TRACKER_FILE = os.path.join(downloader.CONFIG_DIR, "tracked_playlists.json")
 playlist_tracker_lock = threading.Lock()
 
+# Background refresh job tracking
+_refresh_jobs = {}
+_refresh_jobs_lock = threading.Lock()
+
 
 def _load_tracked_playlists():
     if not os.path.exists(PLAYLIST_TRACKER_FILE):
@@ -516,11 +520,7 @@ def tracked_playlists():
         with playlist_tracker_lock:
             items = _load_tracked_playlists()
             if force:
-                print(f"[INFO] Force-refreshing {len(items)} tracked playlists...")
-                refreshed_items = [_refresh_tracked_playlist(dict(item), force=True) for item in items]
-                _save_tracked_playlists(refreshed_items)
-                print(f"[INFO] Done refreshing and saved to tracked_playlists.json")
-                return jsonify({"playlists": refreshed_items})
+                return jsonify({"playlists": items, "note": "Use POST /api/tracked_playlists/refresh for async refresh"})
             else:
                 return jsonify({"playlists": items})
     if request.method == "POST":
@@ -590,6 +590,70 @@ def tracked_playlists():
                 "sync": sync_result,
                 "message": "Playlist is up to date." if sync_result.get("up_to_date") else f"Playlist sync started. Queued {sync_result.get('queued_count', 0)} track(s).",
             })
+
+
+
+def _run_refresh_job(job_id, items):
+    """Background worker: refresh all playlists in parallel and update job state."""
+    total = len(items)
+    refreshed = [None] * total
+    with _refresh_jobs_lock:
+        _refresh_jobs[job_id]["total"] = total
+
+    def _do_one(args):
+        idx, item = args
+        try:
+            result = _refresh_tracked_playlist(dict(item), force=True)
+        except Exception as e:
+            print(f"[ERROR] Refresh job {job_id}: playlist {idx} failed: {e}")
+            result = item
+        with _refresh_jobs_lock:
+            _refresh_jobs[job_id]["progress"] += 1
+        return idx, result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(total, 8)) as executor:
+        for idx, result in executor.map(_do_one, enumerate(items)):
+            refreshed[idx] = result
+
+    with playlist_tracker_lock:
+        _save_tracked_playlists(refreshed)
+
+    with _refresh_jobs_lock:
+        _refresh_jobs[job_id]["status"] = "done"
+        _refresh_jobs[job_id]["playlists"] = refreshed
+    print(f"[INFO] Refresh job {job_id} complete: {total} playlists refreshed.")
+
+
+@app.route("/api/tracked_playlists/refresh", methods=["POST"])
+@auth.login_required
+def start_refresh_job():
+    """Start a background refresh of all tracked playlists. Returns a job_id to poll."""
+    job_id = secrets.token_hex(8)
+    with playlist_tracker_lock:
+        items = _load_tracked_playlists()
+    with _refresh_jobs_lock:
+        _refresh_jobs[job_id] = {"status": "running", "progress": 0, "total": len(items), "playlists": None}
+    t = threading.Thread(target=_run_refresh_job, args=(job_id, items), daemon=True)
+    t.start()
+    print(f"[INFO] Started refresh job {job_id} for {len(items)} playlists.")
+    return jsonify({"job_id": job_id, "total": len(items)})
+
+
+@app.route("/api/tracked_playlists/refresh/<job_id>", methods=["GET"])
+@auth.login_required
+def poll_refresh_job(job_id):
+    """Poll the status of a background refresh job."""
+    with _refresh_jobs_lock:
+        job = _refresh_jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    resp = {"status": job["status"], "progress": job["progress"], "total": job["total"]}
+    if job["status"] == "done":
+        resp["playlists"] = job["playlists"]
+        # Clean up finished jobs after delivering results
+        with _refresh_jobs_lock:
+            _refresh_jobs.pop(job_id, None)
+    return jsonify(resp)
 
 
 @app.route("/api/tracked_playlists/ack-update", methods=["POST"])

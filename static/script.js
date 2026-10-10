@@ -436,20 +436,59 @@ document.addEventListener("DOMContentLoaded", () => {
     isUpdatingTracked = true;
     const { notify = false, force = false } = options;
     try {
-      const url = force
-        ? "/api/tracked_playlists?force=true"
-        : "/api/tracked_playlists";
-      const data = await fetchJsonWithRetry(url, {}, 1, 20000);
-      renderTrackedPlaylists(data.playlists || []);
-      if (typeof applyPlaylistFilter === "function") {
-        applyPlaylistFilter();
-      }
-      if (notify) {
-        displayMessage(
-          force
-            ? "Playlists refreshed successfully!"
-            : "Playlist updates checked.",
+      if (force) {
+        // --- Async background refresh with polling ---
+        const startResp = await fetchJsonWithRetry(
+          "/api/tracked_playlists/refresh",
+          { method: "POST" },
+          1,
+          10000,
         );
+        const jobId = startResp.job_id;
+        const total = startResp.total || "?";
+        if (notify) displayMessage(`Refreshing playlists… 0 / ${total}`);
+
+        // Poll until done
+        const data = await new Promise((resolve, reject) => {
+          const poll = async () => {
+            try {
+              const status = await fetchJsonWithRetry(
+                `/api/tracked_playlists/refresh/${jobId}`,
+                {},
+                0,
+                8000,
+              );
+              if (status.status === "done") {
+                resolve(status);
+              } else {
+                if (notify) {
+                  displayMessage(
+                    `Refreshing playlists… ${status.progress} / ${status.total}`,
+                  );
+                }
+                setTimeout(poll, 2000);
+              }
+            } catch (err) {
+              reject(err);
+            }
+          };
+          poll();
+        });
+
+        renderTrackedPlaylists(data.playlists || []);
+        if (typeof applyPlaylistFilter === "function") applyPlaylistFilter();
+        if (notify) displayMessage("Playlists refreshed successfully!");
+      } else {
+        // --- Normal fast load from disk ---
+        const data = await fetchJsonWithRetry(
+          "/api/tracked_playlists",
+          {},
+          1,
+          20000,
+        );
+        renderTrackedPlaylists(data.playlists || []);
+        if (typeof applyPlaylistFilter === "function") applyPlaylistFilter();
+        if (notify) displayMessage("Playlist updates checked.");
       }
       return true;
     } catch (error) {
